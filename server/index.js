@@ -137,10 +137,10 @@ async function generateRoomCode() {
 io.on("connection", (socket) => {
     console.log("🔌 Socket connected:", socket.id);
 
-    socket.on("createRoom", async ({ name, mode }) => {
+    socket.on("createRoom", async ({ mode, playerName }, callback) => {
         console.log(`[ACTION] createRoom triggered by ${socket.id}`);
         try {
-            const gameMode = mode === "tournament" ? "tournament" : mode === "auction" ? "auction" : "quick";
+            const gameMode = mode === "tournament" ? "tournament" : mode === "auction" ? "auction" : "1v1";
             const code = await generateRoomCode();
             console.log(`[DEBUG] Generated room code: ${code}`);
 
@@ -148,7 +148,7 @@ io.on("connection", (socket) => {
                 code,
                 mode: gameMode,
                 hostSocketId: socket.id,
-                players: [{ socketId: socket.id, name: name || "Host", side: "A" }],
+                players: [{ socketId: socket.id, name: playerName || "Host", side: "A" }],
                 matchState: null,
             };
             
@@ -158,29 +158,39 @@ io.on("connection", (socket) => {
 
             socket.join(code);
             console.log(`[SUCCESS] Room created: ${code} and socket ${socket.id} joined.`);
+            
+            // Use callback for the creator for immediate feedback
+            if (callback) {
+                callback({ code, room, error: null });
+            }
+            
+            // Broadcast update to the room (which is just the host at this point)
             io.to(code).emit("roomUpdate", room);
         } catch (error) {
             console.error("🔴 [ERROR] in createRoom:", error);
-            socket.emit("roomCreationError", { message: "Failed to create room on the server." });
+            if (callback) {
+                callback({ error: "Failed to create room on the server." });
+            }
         }
     });
 
-    socket.on("joinRoom", async ({ code, name }) => {
-        console.log(`[ACTION] joinRoom triggered for code ${code} by ${socket.id}`);
+    socket.on("joinRoom", async ({ code, playerName }, callback) => {
+        const upperCode = (code || "").toUpperCase();
+        console.log(`[ACTION] joinRoom triggered for code ${upperCode} by ${socket.id}`);
         try {
-            const room = await getRoom(code);
+            const room = await getRoom(upperCode);
 
             if (!room) {
-                console.log(`[FAIL] Room ${code} not found in Redis.`);
-                socket.emit("roomJoinError", { message: "Room not found" });
+                console.log(`[FAIL] Room ${upperCode} not found in Redis.`);
+                if (callback) callback({ error: "ROOM_NOT_FOUND" });
                 return;
             }
-            console.log(`[SUCCESS] Found room ${code}. Host: ${room.hostSocketId}`);
+            console.log(`[SUCCESS] Found room ${upperCode}. Host: ${room.hostSocketId}`);
 
             const maxPlayers = room.mode === "tournament" ? 10 : 2;
             if (room.players.length >= maxPlayers) {
-                console.log(`[FAIL] Room ${code} is full.`);
-                socket.emit("roomJoinError", { message: "Room is full" });
+                console.log(`[FAIL] Room ${upperCode} is full.`);
+                if (callback) callback({ error: "ROOM_FULL" });
                 return;
             }
 
@@ -189,23 +199,30 @@ io.on("connection", (socket) => {
             const side = sides.find(s => !takenSides.includes(s));
 
             if (!side) {
-                console.log(`[FAIL] Could not assign side for room ${code}.`);
-                socket.emit("roomJoinError", { message: "Could not assign a team side." });
+                console.log(`[FAIL] Could not assign side for room ${upperCode}.`);
+                if (callback) callback({ error: "CANNOT_ASSIGN_SIDE" });
                 return;
             }
 
-            room.players.push({ socketId: socket.id, name: name || "Guest", side });
+            room.players.push({ socketId: socket.id, name: playerName || "Guest", side });
 
             await saveRoom(room.code, room);
             await redis.set(`socket:${socket.id}`, room.code);
             console.log(`[DEBUG] Mapped socket ${socket.id} to room ${room.code}`);
 
             socket.join(room.code);
+
+            // Use callback for the joiner for immediate feedback
+            if (callback) {
+                callback({ room, error: null });
+            }
+            
             console.log(`[SUCCESS] Socket ${socket.id} joined room ${room.code} as side ${side}`);
+            // Broadcast update to everyone in the room
             io.to(room.code).emit("roomUpdate", room);
         } catch (error) {
-            console.error(`🔴 [ERROR] in joinRoom for code ${code}:`, error);
-            socket.emit("roomJoinError", { message: "An error occurred while trying to join the room." });
+            console.error(`🔴 [ERROR] in joinRoom for code ${upperCode}:`, error);
+            if (callback) callback({ error: "JOIN_SERVER_ERROR" });
         }
     });
 
