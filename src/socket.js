@@ -1,7 +1,7 @@
 // src/socket.js
 import { io } from "socket.io-client";
 
-const SERVER_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+const SERVER_URL = process.env.NODE_ENV === 'production' ? window.location.origin : 'http://localhost:4000';
 
 export const socket = io(SERVER_URL, {
     withCredentials: true,
