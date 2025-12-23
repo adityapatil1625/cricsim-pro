@@ -233,6 +233,33 @@ export default function useMatchEngine() {
         if (isWicket) {
             batStats.out = true;
             bowlStats.wickets += 1;
+
+            const allOut = state.wickets >= state.battingTeam.players.length - 1;
+
+            if (!allOut) {
+                const outBatsmanId = state.strikerId;
+
+                // Find the next available batsman who is not already in the match (striker/non-striker) and not out
+                const nextBatsman = state.battingTeam.players.find(p => {
+                    const pId = p.instanceId || p.id;
+                    const isAlreadyPlaying = (pId === outBatsmanId || pId === state.nonStrikerId);
+                    const isOut = state.batsmanStats[pId]?.out;
+                    return !isAlreadyPlaying && !isOut;
+                });
+
+                if (nextBatsman) {
+                    state.strikerId = nextBatsman.instanceId || nextBatsman.id;
+                } else {
+                     // This case should ideally not be reached if allOut check is correct, but as a fallback,
+                     // let's check for any player who is not out, in case both striker/non-striker are the last men.
+                     const lastManStanding = state.battingTeam.players.find(p => !state.batsmanStats[p.instanceId || p.id]?.out);
+                     if(lastManStanding) {
+                        state.strikerId = lastManStanding.instanceId || lastManStanding.id;
+                     } else {
+                        console.log("Could not find next batsman, even though not all out.");
+                     }
+                }
+            }
         }
 
         state.score += runs + extra;

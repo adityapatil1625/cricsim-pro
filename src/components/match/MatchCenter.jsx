@@ -444,7 +444,7 @@ const MatchCenter = ({
             : null;
 
     return (
-        <div className="h-screen w-screen flex flex-col bg-slate-950 relative overflow-hidden">
+        <div className="min-h-screen w-full flex flex-col bg-slate-950 relative overflow-hidden">
             {/* ✅ INNINGS BREAK OVERLAY */}
             {endOfInnings && !matchState.isMatchOver && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md">

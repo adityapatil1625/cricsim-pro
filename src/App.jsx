@@ -1095,7 +1095,7 @@ const App = () => {
         ];
 
     return (
-        <div className="h-screen w-screen flex flex-col bg-slate-950 relative overflow-hidden">
+        <div className="min-h-screen w-full flex flex-col bg-slate-950 relative overflow-hidden">
           <div className="relative z-10 w-full px-8 py-6 flex justify-between items-end border-b border-white/5 bg-slate-950/80 backdrop-blur-sm flex-shrink-0">
             <div>
               <h1 className="text-6xl font-broadcast text-white leading-none drop-shadow-lg">
@@ -1285,7 +1285,7 @@ const App = () => {
       }
       
       return (
-          <div className="h-screen w-screen flex flex-col bg-slate-950 relative overflow-hidden">
+          <div className="min-h-screen w-full flex flex-col bg-slate-950 relative overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/10 via-slate-950 to-slate-950" />
             
             {/* Header */}
@@ -1549,7 +1549,7 @@ const App = () => {
     const teams = tournTeams;
 
     return (
-        <div className="h-screen w-screen flex flex-col bg-slate-950 relative overflow-hidden">
+        <div className="min-h-screen w-full flex flex-col bg-slate-950 relative overflow-hidden">
           <div className="relative z-10 w-full px-8 py-6 flex justify-between items-end border-b border-white/5 bg-slate-950/80 backdrop-blur-sm flex-shrink-0">
             <div>
               <h1 className="text-6xl font-broadcast text-white leading-none drop-shadow-lg">
