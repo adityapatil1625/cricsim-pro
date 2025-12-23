@@ -5,10 +5,25 @@ const axios = require("axios");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
+const Redis = require("ioredis");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const API_KEY = process.env.CRICKETDATA_API_KEY;
+
+// --- Redis Client Setup ---
+if (!process.env.REDIS_URL) {
+    console.error("🔴 REDIS_URL is not set. Please set it in your environment variables.");
+}
+const redis = new Redis(process.env.REDIS_URL, {
+    // Add TLS for secure connection, required by Vercel KV and other cloud providers
+    tls: {
+        rejectUnauthorized: false
+    }
+});
+
+redis.on('connect', () => console.log("✅ Connected to Redis"));
+redis.on('error', (err) => console.error("🔴 Redis Connection Error", err));
 
 // 🔹 CORS for REST + Socket.io (must match frontend origin)
 const allowedOrigins = [
@@ -125,16 +140,34 @@ const io = new Server(server, {
     },
 });
 
-// code -> { code, mode, players: [{socketId, name, side}], matchState? }
-const rooms = new Map();
+// Helper function to get a room from Redis
+const getRoom = async (code) => {
+    if (!code) return null;
+    const roomData = await redis.get(`room:${code.toUpperCase()}`);
+    return roomData ? JSON.parse(roomData) : null;
+};
+
+// Helper function to save a room to Redis
+const saveRoom = async (code, room) => {
+    if (!code || !room) return;
+    // Set an expiration for the room data to auto-clean up (e.g., 6 hours)
+    await redis.set(`room:${code.toUpperCase()}`, JSON.stringify(room), "EX", 60 * 60 * 6);
+};
+
 
 // Generate random 5-character room code
-function generateRoomCode() {
+async function generateRoomCode() {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let code = "";
-    for (let i = 0; i < 5; i++) {
-        code += chars[Math.floor(Math.random() * chars.length)];
-    }
+    let code;
+    let attempts = 0;
+    do {
+        code = "";
+        for (let i = 0; i < 5; i++) {
+            code += chars[Math.floor(Math.random() * chars.length)];
+        }
+        attempts++;
+        if (attempts > 100) throw new Error("Failed to generate a unique room code.");
+    } while (await redis.exists(`room:${code}`)); // Check for existence in Redis
     return code;
 }
 
@@ -142,41 +175,43 @@ io.on("connection", (socket) => {
     console.log("🔌 Socket connected:", socket.id);
 
     // CREATE ROOM (host)
-    socket.on("createRoom", ({ name, mode }) => {
+    socket.on("createRoom", async ({ name, mode }) => {
+      try {
         const gameMode = mode === "tournament" ? "tournament" : mode === "auction" ? "auction" : "quick";
 
-        let code;
-        do {
-            code = generateRoomCode();
-        } while (rooms.has(code));
+        const code = await generateRoomCode();
 
         const room = {
             code,
             mode: gameMode,
-            hostSocketId: socket.id, // ✅ Track host
+            hostSocketId: socket.id,
             players: [
                 {
                     socketId: socket.id,
                     name: name || "Host",
-                    side: "A", // host = Team A
+                    side: "A",
                 },
             ],
             matchState: null,
         };
+        
+        await saveRoom(code, room);
+        await redis.set(`socket:${socket.id}`, code); // Map socket to room code
 
-        rooms.set(code, room);
         socket.join(code);
 
         console.log(`🏟️ Room created: ${code} (${gameMode}) by ${socket.id}`);
-        console.log(`🔍 Room object:`, JSON.stringify(room, null, 2));
-
         io.to(code).emit("roomUpdate", room);
+      } catch (error) {
+        console.error("Error creating room:", error);
+        socket.emit("roomCreationError", { message: "Failed to create room on the server." });
+      }
     });
 
     // JOIN ROOM (guest)
-    socket.on("joinRoom", ({ code, name }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    socket.on("joinRoom", async ({ code, name }) => {
+      try {
+        const room = await getRoom(code);
 
         if (!room) {
             socket.emit("roomJoinError", { message: "Room not found" });
@@ -189,10 +224,14 @@ io.on("connection", (socket) => {
             return;
         }
 
-        // Assign team letter: A, B, C, D, E, F, G, H, I, J
         const sides = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
         const takenSides = room.players.map(p => p.side);
         const side = sides.find(s => !takenSides.includes(s));
+
+        if (!side) {
+            socket.emit("roomJoinError", { message: "Could not assign a team side." });
+            return;
+        }
 
         room.players.push({
             socketId: socket.id,
@@ -200,19 +239,22 @@ io.on("connection", (socket) => {
             side,
         });
 
-        rooms.set(upper, room);
-        socket.join(upper);
+        await saveRoom(room.code, room);
+        await redis.set(`socket:${socket.id}`, room.code); // Map socket to room
 
-        console.log(`👥 Socket ${socket.id} joined room ${upper} as side ${side}`);
-        console.log(`🔍 Updated room object:`, JSON.stringify(room, null, 2));
+        socket.join(room.code);
 
-        io.to(upper).emit("roomUpdate", room);
+        console.log(`👥 Socket ${socket.id} joined room ${room.code} as side ${side}`);
+        io.to(room.code).emit("roomUpdate", room);
+      } catch (error) {
+        console.error(`Error in joinRoom for code ${code}:`, error);
+        socket.emit("roomJoinError", { message: "An error occurred while trying to join the room." });
+      }
     });
 
     // Player selects IPL team
-    socket.on("selectIPLTeam", ({ code, teamId }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    socket.on("selectIPLTeam", async ({ code, teamId }) => {
+        const room = await getRoom(code);
         if (!room) return;
 
         // Check if team is already taken
@@ -226,49 +268,34 @@ io.on("connection", (socket) => {
         const player = room.players.find(p => p.socketId === socket.id);
         if (player) {
             player.iplTeam = teamId;
-            rooms.set(upper, room);
-            console.log(`🏏 Player ${player.name} selected team ${teamId} in room ${upper}`);
-            io.to(upper).emit("roomUpdate", room);
+            await saveRoom(room.code, room);
+            console.log(`🏏 Player ${player.name} selected team ${teamId} in room ${room.code}`);
+            io.to(room.code).emit("roomUpdate", room);
         }
     });
 
-    // Host navigates everyone to Quick Setup
-    socket.on("navigateToQuickSetup", ({ code }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    // Helper for simple "broadcast to room" actions
+    const createRoomAction = (eventName) => async ({ code }) => {
+        const room = await getRoom(code);
         if (!room) return;
+        console.log(`➡️ ${eventName} for room ${code}`);
+        // Use `io.to()` which also emits to the sender
+        io.to(code).emit(eventName);
+    };
 
-        console.log(`➡️ navigateToQuickSetup for room ${upper}`);
-        io.to(upper).emit("navigateToQuickSetup");
-    });
-
-    // Host navigates everyone to Tournament Setup
-    socket.on("navigateToTournamentSetup", ({ code }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
-        if (!room) return;
-
-        console.log(`➡️ navigateToTournamentSetup for room ${upper}`);
-        io.to(upper).emit("navigateToTournamentSetup");
-    });
+    // Host navigates everyone to different setup pages
+    socket.on("navigateToQuickSetup", createRoomAction("navigateToQuickSetup"));
+    socket.on("navigateToTournamentSetup", createRoomAction("navigateToTournamentSetup"));
+    socket.on("navigateToAuctionLobby", createRoomAction("navigateToAuctionLobby"));
+    socket.on("navigateToTournamentHub", createRoomAction("navigateToTournamentHub"));
     
-    // Host navigates everyone to Auction Lobby
-    socket.on("navigateToAuctionLobby", ({ code }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
-        if (!room) return;
-
-        console.log(`➡️ navigateToAuctionLobby for room ${upper}`);
-        io.to(upper).emit("navigateToAuctionLobby");
-    });
     
     // Host starts auction for everyone
-    socket.on("startAuction", ({ code }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    socket.on("startAuction", async ({ code }) => {
+        const room = await getRoom(code);
         if (!room) return;
 
-        console.log(`🔨 startAuction for room ${upper}`);
+        console.log(`🔨 startAuction for room ${code}`);
         
         // Initialize auction state
         room.auctionState = {
@@ -281,14 +308,14 @@ io.on("connection", (socket) => {
             soldPlayers: [],
             unsoldPlayers: []
         };
+        await saveRoom(code, room);
         
-        io.to(upper).emit("startAuction");
+        io.to(code).emit("startAuction");
     });
     
     // Start next player in auction
-    socket.on("auctionNextPlayer", ({ code, player, basePrice }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    socket.on("auctionNextPlayer", async ({ code, player, basePrice }) => {
+        const room = await getRoom(code);
         if (!room || !room.auctionState) return;
         
         room.auctionState.phase = "bidding";
@@ -299,17 +326,17 @@ io.on("connection", (socket) => {
         room.auctionState.bidHistory = [];
         room.auctionState.passedTeams = [];
         
+        await saveRoom(code, room);
         console.log(`🎯 Auction next player: ${player.name} at ₹${basePrice}L`);
-        io.to(upper).emit("auctionStateUpdate", room.auctionState);
+        io.to(code).emit("auctionStateUpdate", room.auctionState);
         
         // Start timer
-        startAuctionTimer(upper);
+        startAuctionTimer(code);
     });
     
     // Place bid
-    socket.on("auctionPlaceBid", ({ code, teamId, teamName, amount }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    socket.on("auctionPlaceBid", async ({ code, teamId, teamName, amount }) => {
+        const room = await getRoom(code);
         if (!room || !room.auctionState || room.auctionState.phase !== "bidding") return;
         
         room.auctionState.currentBid = amount;
@@ -318,149 +345,130 @@ io.on("connection", (socket) => {
         room.auctionState.bidHistory.push({ team: teamName, amount, timestamp: Date.now() });
         room.auctionState.passedTeams = []; // Reset passed teams when someone bids
         
+        await saveRoom(code, room);
         console.log(`💰 ${teamName} bids ₹${amount}L`);
-        io.to(upper).emit("auctionStateUpdate", room.auctionState);
+        io.to(code).emit("auctionStateUpdate", room.auctionState);
         
         // Restart timer
         if (room.auctionTimer) clearInterval(room.auctionTimer);
-        startAuctionTimer(upper);
+        startAuctionTimer(code);
     });
     
     // Team passes on player
-    socket.on("auctionPass", ({ code, teamId, teamName }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
-        console.log(`🚫 Pass received: code=${code}, teamId=${teamId}, teamName=${teamName}`);
-        console.log(`🚫 Room exists:`, !!room, "auctionState exists:", !!room?.auctionState, "phase:", room?.auctionState?.phase);
-        
+    socket.on("auctionPass", async ({ code, teamId, teamName }) => {
+        const room = await getRoom(code);
         if (!room || !room.auctionState || room.auctionState.phase !== "bidding") {
-            console.log(`❌ Pass rejected - room:${!!room}, state:${!!room?.auctionState}, phase:${room?.auctionState?.phase}`);
             return;
         }
         
-        // Initialize passedTeams if not exists
         if (!room.auctionState.passedTeams) {
             room.auctionState.passedTeams = [];
         }
         
-        // Add team to passed list if not already there
         if (!room.auctionState.passedTeams.includes(teamId)) {
             room.auctionState.passedTeams.push(teamId);
+            await saveRoom(code, room);
             console.log(`🚫 ${teamName} passed on ${room.auctionState.currentPlayer?.name}`);
             
-            // Broadcast pass event
-            io.to(upper).emit("auctionPlayerPassed", { teamName });
+            io.to(code).emit("auctionPlayerPassed", { teamName });
             
-            // Check if all teams have passed
             const totalTeams = room.players.filter(p => p.iplTeam).length;
             if (room.auctionState.passedTeams.length >= totalTeams) {
-                console.log(`❌ All teams passed - marking as UNSOLD`);
-                // Clear timer and mark as unsold
                 if (room.auctionTimer) clearInterval(room.auctionTimer);
-                io.to(upper).emit("auctionAllPassed");
+                io.to(code).emit("auctionAllPassed");
             }
-        } else {
-            console.log(`⚠️ ${teamName} already passed`);
         }
     });
     
     // Mark player as sold
-    socket.on("auctionPlayerSold", ({ code, player, team, price }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    socket.on("auctionPlayerSold", async ({ code, player, team, price }) => {
+        const room = await getRoom(code);
         if (!room || !room.auctionState) return;
         
         room.auctionState.phase = "sold";
         room.auctionState.soldPlayers.push({ player, team, price });
         
+        await saveRoom(code, room);
         console.log(`✅ ${player.name} SOLD to ${team.name} for ₹${price}L`);
-        io.to(upper).emit("auctionStateUpdate", room.auctionState);
-        io.to(upper).emit("auctionPlayerSoldBroadcast", { player, team, price });
+        io.to(code).emit("auctionStateUpdate", room.auctionState);
+        io.to(code).emit("auctionPlayerSoldBroadcast", { player, team, price });
         
         if (room.auctionTimer) clearInterval(room.auctionTimer);
     });
     
     // Mark player as unsold
-    socket.on("auctionPlayerUnsold", ({ code, player }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    socket.on("auctionPlayerUnsold", async ({ code, player }) => {
+        const room = await getRoom(code);
         if (!room || !room.auctionState) return;
         
         room.auctionState.phase = "sold";
         room.auctionState.unsoldPlayers.push(player);
         
+        await saveRoom(code, room);
         console.log(`❌ ${player.name} UNSOLD`);
-        io.to(upper).emit("auctionStateUpdate", room.auctionState);
-        io.to(upper).emit("auctionPlayerUnsoldBroadcast", { player });
+        io.to(code).emit("auctionStateUpdate", room.auctionState);
+        io.to(code).emit("auctionPlayerUnsoldBroadcast", { player });
         
         if (room.auctionTimer) clearInterval(room.auctionTimer);
     });
     
-    // Helper function for auction timer
-    function startAuctionTimer(roomCode) {
-        const room = rooms.get(roomCode);
+    // ⚠️ WARNING: This timer is not suitable for a serverless environment.
+    // A serverless function may be terminated between setInterval ticks. For a robust
+    // solution, a stateful timing service or a different architecture is needed.
+    // This is left as-is to preserve original functionality on non-serverless deployments.
+    async function startAuctionTimer(roomCode) {
+        const room = await getRoom(roomCode);
         if (!room || !room.auctionState) return;
         
-        // Clear any existing timer
         if (room.auctionTimer) {
             clearInterval(room.auctionTimer);
         }
         
-        room.auctionTimer = setInterval(() => {
-            if (!room.auctionState || room.auctionState.phase !== "bidding") {
+        room.auctionTimer = setInterval(async () => {
+            // Re-fetch room on each tick to ensure we have the latest state
+            const currentRoom = await getRoom(roomCode);
+            if (!currentRoom || !currentRoom.auctionState || currentRoom.auctionState.phase !== "bidding") {
                 clearInterval(room.auctionTimer);
                 room.auctionTimer = null;
                 return;
             }
             
-            room.auctionState.timer--;
+            currentRoom.auctionState.timer--;
+            await saveRoom(roomCode, currentRoom);
             
-            if (room.auctionState.timer <= 0) {
+            if (currentRoom.auctionState.timer <= 0) {
                 clearInterval(room.auctionTimer);
                 room.auctionTimer = null;
-                room.auctionState.timer = 0; // Set to 0, not negative
-                // Timer expired - emit event to handle sold/unsold
+                currentRoom.auctionState.timer = 0;
+                await saveRoom(roomCode, currentRoom);
                 io.to(roomCode).emit("auctionTimerExpired");
             } else {
-                // Broadcast timer update
-                io.to(roomCode).emit("auctionTimerUpdate", room.auctionState.timer);
+                io.to(roomCode).emit("auctionTimerUpdate", currentRoom.auctionState.timer);
             }
         }, 1000);
     }
     
-    // Navigate all players back to tournament hub
-    socket.on("navigateToTournamentHub", ({ code }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
-        if (!room) return;
-
-        console.log(`➡️ navigateToTournamentHub for room ${upper}`);
-        io.in(upper).emit("navigateToTournamentHub"); // Use 'in' to include sender
-    });
     
     // Broadcast tournament results (fixtures and teams) to all players
-    socket.on("tournamentResultsUpdate", ({ code, fixtures, tournTeams, phase }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    socket.on("tournamentResultsUpdate", async ({ code, fixtures, tournTeams, phase }) => {
+        const room = await getRoom(code);
         if (!room) {
-            console.log(`❌ Room ${upper} not found for tournament results`);
+            console.log(`❌ Room ${code} not found for tournament results`);
             return;
         }
 
-        console.log(`📊 Broadcasting tournament results for room ${upper} to ${room.players.length} players`);
-        io.in(upper).emit("tournamentResultsUpdate", { fixtures, tournTeams, phase });
+        console.log(`📊 Broadcasting tournament results for room ${code} to ${room.players.length} players`);
+        io.in(code).emit("tournamentResultsUpdate", { fixtures, tournTeams, phase });
     });
 
     // Generate round-robin fixtures for tournament
-    socket.on("generateTournamentFixtures", ({ code }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    socket.on("generateTournamentFixtures", async ({ code }) => {
+        const room = await getRoom(code);
         if (!room || room.mode !== "tournament") return;
 
         const players = room.players;
         if (players.length < 2) return;
 
-        // Generate round-robin fixtures
         const fixtures = [];
         let fixtureId = 1;
         for (let i = 0; i < players.length; i++) {
@@ -478,99 +486,97 @@ io.on("connection", (socket) => {
         }
 
         room.fixtures = fixtures;
-        rooms.set(upper, room);
+        await saveRoom(code, room);
 
-        console.log(`🏆 Generated ${fixtures.length} fixtures for room ${upper}`);
-        io.to(upper).emit("tournamentFixturesGenerated", { fixtures });
+        console.log(`🏆 Generated ${fixtures.length} fixtures for room ${code}`);
+        io.to(code).emit("tournamentFixturesGenerated", { fixtures });
     });
 
 
     // Start an online match (host triggers)
-    socket.on("startOnlineMatch", ({ code }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    socket.on("startOnlineMatch", async ({ code }) => {
+        const room = await getRoom(code);
         if (!room) return;
 
-        console.log(`🏏 startOnlineMatch in room ${upper}`);
-        // We don't force the matchState here; that comes via matchStateUpdate
-        io.to(upper).emit("startOnlineMatch");
+        console.log(`🏏 startOnlineMatch in room ${code}`);
+        io.to(code).emit("startOnlineMatch");
     });
 
     // Sync match state (host sends, everyone receives)
-    socket.on("matchStateUpdate", ({ code, matchState }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    socket.on("matchStateUpdate", async ({ code, matchState }) => {
+        const room = await getRoom(code);
         if (!room) return;
 
         room.matchState = matchState;
-        rooms.set(upper, room);
+        await saveRoom(code, room);
 
-        // Broadcast to everyone (including host so guests stay in sync)
-        io.to(upper).emit("matchStateUpdate", { matchState });
+        io.to(code).emit("matchStateUpdate", { matchState });
     });
 
     // End match
-    socket.on("endOnlineMatch", ({ code }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    socket.on("endOnlineMatch", async ({ code }) => {
+        const room = await getRoom(code);
         if (!room) return;
 
-        console.log(`🏁 endOnlineMatch in room ${upper}`);
-        io.to(upper).emit("endOnlineMatch");
-        room.matchState = null;
-        rooms.set(upper, room);
+        console.log(`🏁 endOnlineMatch in room ${code}`);
+        room.matchState = null; // Clear the match state
+        await saveRoom(code, room);
+        io.to(code).emit("endOnlineMatch");
     });
 
-    // ✅ Sync team selections between players
-    socket.on("teamUpdate", ({ code, teamA, teamB }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    // Sync team selections between players
+    socket.on("teamUpdate", async ({ code, teamA, teamB }) => {
+        const room = await getRoom(code);
         if (!room) return;
 
         room.teamA = teamA;
         room.teamB = teamB;
-        rooms.set(upper, room);
+        await saveRoom(code, room);
 
-        // Broadcast to other player
-        socket.to(upper).emit("teamUpdate", { teamA, teamB });
+        socket.to(code).emit("teamUpdate", { teamA, teamB });
     });
 
-    // ✅ Sync tournament team selections between all players
-    socket.on("tournamentTeamUpdate", ({ code, teams }) => {
-        const upper = (code || "").toUpperCase();
-        const room = rooms.get(upper);
+    // Sync tournament team selections between all players
+    socket.on("tournamentTeamUpdate", async ({ code, teams }) => {
+        const room = await getRoom(code);
         if (!room || room.mode !== "tournament") return;
 
-        console.log(`📤 Tournament team update from ${socket.id} in room ${upper}`);
-        console.log(`📤 Broadcasting to ${room.players.length - 1} other players`);
-
+        console.log(`📤 Tournament team update from ${socket.id} in room ${code}`);
         room.teams = teams;
-        rooms.set(upper, room);
+        await saveRoom(code, room);
 
-        // Broadcast to all other players
-        socket.to(upper).emit("tournamentTeamUpdate", { teams });
+        socket.to(code).emit("tournamentTeamUpdate", { teams });
     });
 
     // Handle disconnect and clean up rooms
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async () => {
         console.log("❌ Socket disconnected:", socket.id);
+        try {
+            const code = await redis.get(`socket:${socket.id}`);
+            if (code) {
+                const room = await getRoom(code);
+                if (room) {
+                    room.players = room.players.filter(p => p.socketId !== socket.id);
 
-        for (const [code, room] of rooms.entries()) {
-            const idx = room.players.findIndex((p) => p.socketId === socket.id);
-            if (idx !== -1) {
-                room.players.splice(idx, 1);
-
-                if (room.players.length === 0) {
-                    console.log(`🧹 Deleting empty room ${code}`);
-                    rooms.delete(code);
-                } else {
-                    rooms.set(code, room);
-                    io.to(code).emit("roomUpdate", room);
+                    if (room.players.length === 0) {
+                        await redis.del(`room:${code}`);
+                        console.log(`🧹 Deleted empty room ${code}`);
+                    } else {
+                        if (room.hostSocketId === socket.id) {
+                            room.hostSocketId = room.players[0].socketId;
+                            console.log(`👑 New host for room ${code}: ${room.hostSocketId}`);
+                        }
+                        await saveRoom(code, room);
+                        io.to(code).emit("roomUpdate", room);
+                    }
                 }
-                break; // socket can belong to only one room in this design
+                await redis.del(`socket:${socket.id}`);
             }
+        } catch (error) {
+            console.error(`Error during disconnect for socket ${socket.id}:`, error);
         }
     });
+});
 });
 
 server.listen(PORT, () => {
