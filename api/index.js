@@ -297,6 +297,13 @@ io.on("connection", (socket) => {
     });
 });
 
-server.listen(PORT, () => {
+// When deploying to Vercel, we need to export the server instance.
+// Vercel's runtime will handle the 'listening' part.
+// When running locally, we use server.listen() as usual.
+if (process.env.VERCEL) {
+  module.exports = server;
+} else {
+  server.listen(PORT, () => {
     console.log(`🚀 Server listening on http://localhost:${PORT}`);
-});
+  });
+}
