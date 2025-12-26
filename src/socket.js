@@ -2,7 +2,7 @@
 import { io } from "socket.io-client";
 
 const SERVER_URL = import.meta.env.PROD
-    ? (import.meta.env.VITE_SOCKET_SERVER || 'https://cricsim-pro-server.onrender.com')
+    ? (import.meta.env.VITE_SOCKET_SERVER || 'https://cricsim-pro.onrender.com')
     : 'http://localhost:4000';
 
 console.log(`🔌 Socket.IO connecting to: ${SERVER_URL}`);

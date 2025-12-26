@@ -3,7 +3,7 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "env": {
-    "VITE_SOCKET_SERVER": "@socket_server_url"
+    "VITE_SOCKET_SERVER": "https://cricsim-pro.onrender.com"
   }
 }
 
