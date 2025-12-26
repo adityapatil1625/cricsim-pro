@@ -2,11 +2,8 @@
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
   "env": {
     "VITE_SOCKET_SERVER": "@socket_server_url"
-  },
-  "envDescription": "Socket.IO server URL for multiplayer features"
+  }
 }
 
