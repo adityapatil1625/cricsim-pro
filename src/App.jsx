@@ -1165,6 +1165,16 @@ const App = () => {
           <div className="relative z-10 flex-1 flex p-6 gap-6 min-h-0 overflow-hidden">
             <div className="flex-1 flex flex-col min-h-0">
               <PlayerSearch activeTeam={activeTeamSelect} onAddPlayer={handleAddToActiveTeam} />
+              {!activeTeamSelect && (
+                <div className="mt-4 p-4 bg-blue-900/30 border border-blue-700 rounded-lg text-center">
+                  <p className="text-blue-300 text-sm font-semibold">👈 Select a team on the right to add players</p>
+                </div>
+              )}
+              {activeTeamSelect && (
+                <div className="mt-4 p-4 bg-green-900/30 border border-green-700 rounded-lg text-center">
+                  <p className="text-green-300 text-sm font-semibold">✅ Team <strong>{activeTeamSelect}</strong> selected - Search and add players</p>
+                </div>
+              )}
             </div>
 
             <div className="w-96 flex flex-col gap-4 h-full min-h-0">
@@ -1175,7 +1185,7 @@ const App = () => {
                 <p className="text-xs text-slate-500">
                   {isOnline 
                     ? "Select 11 players for your squad" 
-                    : "Click a team to select it for drafting."}
+                    : "Click a team below to select it."}
                 </p>
                 
                 {/* ✅ Show opponent status in online mode */}
@@ -1203,11 +1213,19 @@ const App = () => {
                   const ownerName = isOnline 
                     ? onlineRoom?.players?.find((p) => p.side === t.id)?.name 
                     : null;
+                  
+                  const handleTeamClick = () => {
+                    console.log("🎯 Team clicked:", t.id, "isMyTeam:", isMyTeam);
+                    if (isMyTeam) {
+                      console.log("✅ Setting activeTeamSelect to:", t.id);
+                      setActiveTeamSelect(t.id);
+                    }
+                  };
 
                   return (
                     <div
                         key={t.id}
-                        onClick={() => isMyTeam && setActiveTeamSelect(t.id)}
+                        onClick={handleTeamClick}
                         className={`group rounded-2xl transition-all duration-300 flex-1 flex flex-col relative overflow-hidden border-2 ${
                             !isMyTeam 
                                 ? "border-slate-700 bg-slate-900/20 opacity-60 cursor-not-allowed"
@@ -2411,7 +2429,9 @@ const App = () => {
                           <button
                             key={team.id}
                             onClick={() => {
+                              console.log("🏟️ Clicking team:", team.id, "code:", onlineRoom.code);
                               socket.emit("selectIPLTeam", { code: onlineRoom.code, teamId: team.id });
+                              console.log("🏟️ Emitted selectIPLTeam");
                             }}
                             className="group relative p-4 rounded-xl bg-slate-700/50 hover:bg-slate-600 border-2 border-transparent hover:border-brand-gold/50 transition-all duration-300 hover:shadow-lg"
                           >
@@ -2516,20 +2536,34 @@ const App = () => {
                         });
                         setView("auction_lobby");
                       } else {
+                        // For quick matches, both players must have selected IPL teams
+                        const allTeamsSelected = onlineRoom.players.every(p => p.iplTeam);
+                        if (!allTeamsSelected) {
+                          alert("All players must select an IPL team first");
+                          return;
+                        }
                         socket.emit("navigateToQuickSetup", {
                           code: onlineRoom.code,
                         });
                         setView("quick_setup");
                       }
                     }}
-                    disabled={onlineRoom.mode === "quick" && onlineRoom.players.length < 2}
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg py-2 text-sm font-bold uppercase tracking-widest mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={
+                      onlineRoom.mode === "quick" 
+                        ? (onlineRoom.players.length < 2 || !onlineRoom.players.every(p => p.iplTeam))
+                        : onlineRoom.mode === "tournament"
+                        ? onlineRoom.players.length < 2
+                        : onlineRoom.mode === "auction"
+                        ? onlineRoom.players.length < 2
+                        : false
+                    }
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg py-2 text-sm font-bold uppercase tracking-widest mb-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   {onlineRoom.mode === "tournament"
                       ? `Start Team Selection (${onlineRoom.players.length} Players)`
                       : onlineRoom.mode === "auction"
                       ? `Start Auction Lobby (${onlineRoom.players.length} Players)`
-                      : "Go to Quick Match Setup"}
+                      : `Go to Squad Selection (${onlineRoom.players.filter(p => p.iplTeam).length}/${onlineRoom.players.length} Teams Selected)`}
                 </button>
             )}
 

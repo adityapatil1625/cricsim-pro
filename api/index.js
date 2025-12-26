@@ -258,6 +258,35 @@ io.on("connection", (socket) => {
         }
     });
 
+    socket.on("selectIPLTeam", async ({ code, teamId }, callback) => {
+        console.log(`[ACTION] selectIPLTeam: code=${code}, teamId=${teamId}, socket=${socket.id}`);
+        try {
+            const room = await getRoom(code);
+            if (!room) {
+                console.log(`[FAIL] Room ${code} not found`);
+                return;
+            }
+            
+            // Update the player's IPL team
+            const player = room.players.find(p => p.socketId === socket.id);
+            if (player) {
+                player.iplTeam = teamId;
+                console.log(`[SUCCESS] Updated player ${socket.id} with team ${teamId}`);
+            }
+            
+            await saveRoom(code, room);
+            
+            // Broadcast updated room to ALL players (including sender)
+            io.to(code).emit("roomUpdate", room);
+            console.log(`[DEBUG] Broadcasted roomUpdate for code ${code}`);
+            
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error(`[ERROR] in selectIPLTeam:`, error);
+            if (callback) callback({ error: error.message });
+        }
+    });
+
     // --- Passthrough Handlers ---
     const createRoomAction = (eventName) => async ({ code, ...rest }) => {
         const room = await getRoom(code);
