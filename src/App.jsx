@@ -105,12 +105,16 @@ const App = () => {
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
   const [onlineGameType, setOnlineGameType] = useState(null); // "quick" | "tournament" | null
+  const [isStartingMatch, setIsStartingMatch] = useState(false);
 
   // Guest's mirror state for online matches
   const [remoteMatchState, setRemoteMatchState] = useState(null);
   
   // Ref to prevent broadcast loop when receiving tournament team updates
   const isReceivingTeamUpdate = React.useRef(false);
+  
+  // Ref to track if guest has already marked themselves as ready
+  const guestMarkedReady = React.useRef(false);
 
   const {
     matchState,
@@ -128,7 +132,7 @@ const App = () => {
 
   // Derived online flags
   const isOnline = !!onlineRoom;
-  const isOnlineHost = isOnline && onlineRoom?.hostSocketId === socket.id;
+  const isOnlineHost = isOnline && onlineRoom?.host === socket.id;
 
   // 🔍 Debug logging
   useEffect(() => {
@@ -148,20 +152,11 @@ const App = () => {
   // ---------- SOCKET LISTENERS: ROOM UPDATES ----------
   useEffect(() => {
     function handleRoomUpdate(room) {
-      console.log("📥 Received roomUpdate:", room); // 🔍 Debug
+      console.log("📥 Received roomUpdate:", JSON.stringify(room, null, 2)); // 🔍 Debug
       setOnlineRoom(room);
 
       // convenience: keep joinCode in sync with room code
       if (!joinCode) setJoinCode(room.code);
-
-      // ✅ Auto-navigate based on mode
-      if (room.players?.length === 2 && room.mode === "1v1") {
-        const mySide = room.players.find((p) => p.socketId === socket.id)?.side || "A";
-        setActiveTeamSelect(mySide);
-        setView("quick_setup");
-      } else {
-        setView("online_menu");
-      }
     }
 
     socket.on("roomUpdate", handleRoomUpdate);
@@ -240,6 +235,22 @@ const App = () => {
       if (phase) setTournPhase(phase);
     }
 
+    function handleReceiveToss({ tossWinner, tossWinnerName }) {
+      console.log(`🏏 Guest received toss result: ${tossWinnerName} (ID: ${tossWinner})`);
+      // Find the team object matching the toss winner ID
+      const winnerTeam = teamA.id === tossWinner ? teamA : teamB.id === tossWinner ? teamB : null;
+      if (winnerTeam) {
+        setTossWinner(winnerTeam);
+        setShowToss(true);
+        console.log(`✅ Guest showing toss animation for: ${winnerTeam.name}`);
+        
+        // Hide toss after 3 seconds (match host timing)
+        setTimeout(() => {
+          setShowToss(false);
+        }, 3000);
+      }
+    }
+
     socket.on("navigateToQuickSetup", handleNavigateQuickSetup);
     socket.on("navigateToTournamentSetup", handleNavigateTournamentSetup);
     socket.on("navigateToAuctionLobby", handleNavigateToAuctionLobby);
@@ -247,6 +258,7 @@ const App = () => {
     socket.on("tournamentFixturesGenerated", handleTournamentFixturesGenerated);
     socket.on("navigateToTournamentHub", handleNavigateToTournamentHub);
     socket.on("tournamentResultsUpdate", handleTournamentResultsUpdate);
+    socket.on("receiveToss", handleReceiveToss);
 
     return () => {
       socket.off("navigateToQuickSetup", handleNavigateQuickSetup);
@@ -256,6 +268,7 @@ const App = () => {
       socket.off("tournamentFixturesGenerated", handleTournamentFixturesGenerated);
       socket.off("navigateToTournamentHub", handleNavigateToTournamentHub);
       socket.off("tournamentResultsUpdate", handleTournamentResultsUpdate);
+      socket.off("receiveToss", handleReceiveToss);
     };
   }, [onlineRoom]);
 
@@ -263,17 +276,24 @@ const App = () => {
 
   // ---------- SOCKET LISTENERS: MATCH SYNC ----------
   useEffect(() => {
-    function handleStartOnlineMatch(data = {}) {
-      const { fixtureTeams } = data;
-      // Guest receives this when host starts match
-      console.log("📢 Received startOnlineMatch", fixtureTeams);
+    function handleMatchStarted(data) {
+      console.log("📢 Raw matchStarted event received:", data);
       
-      // All players can spectate, but we'll disable controls for non-playing teams
-      // Only host changes view immediately, guests wait for matchStateUpdate
-      if (isOnlineHost) {
-        setMatchTab("live");
-        setView("match");
+      // Extract matchState from data
+      const receivedState = data?.matchState || data;
+      
+      if (!receivedState) {
+        console.error("❌ No matchState in matchStarted event", data);
+        return;
       }
+      
+      // Both host and guest receive this when host starts match
+      console.log("✅ 📢 Processing matchStarted with state:", receivedState);
+
+      syncMatchState(receivedState);
+      setMatchTab("live");
+      setView("match");
+      console.log("✅ View changed to 'match'");
     }
 
     function handleMatchStateUpdate({ matchState: receivedState }) {
@@ -296,12 +316,12 @@ const App = () => {
       }
     }
 
-    socket.on("startOnlineMatch", handleStartOnlineMatch);
+    socket.on("matchStarted", handleMatchStarted);
     socket.on("matchStateUpdate", handleMatchStateUpdate);
     socket.on("endOnlineMatch", handleEndOnlineMatch);
 
     return () => {
-      socket.off("startOnlineMatch", handleStartOnlineMatch);
+      socket.off("matchStarted", handleMatchStarted);
       socket.off("matchStateUpdate", handleMatchStateUpdate);
       socket.off("endOnlineMatch", handleEndOnlineMatch);
     };
@@ -323,19 +343,12 @@ const App = () => {
     });
   }, [matchState?.ballsBowled, matchState?.isMatchOver, isOnline, view, onlineRoom]);
 
-  // Broadcast initial match state for online tournament
+  // Reset guest ready flag when leaving online room
   useEffect(() => {
-    if (!isOnline || !isOnlineHost || !onlineRoom?.code) return;
-    if (view !== "match" || !matchState) return;
-    if (matchState.mode !== "tourn") return;
-    if (matchState.ballsBowled !== 0) return; // Only for initial state
-    
-    // Broadcast initial state
-    socket.emit("matchStateUpdate", {
-      code: onlineRoom.code,
-      matchState,
-    });
-  }, [matchState, isOnline, isOnlineHost, onlineRoom, view]);
+    if (!isOnline || view !== "quick_setup") {
+      guestMarkedReady.current = false;
+    }
+  }, [isOnline, view]);
 
   // ✅ SYNC TEAMS: Broadcast when teams change
   useEffect(() => {
@@ -349,6 +362,26 @@ const App = () => {
         teamA,
         teamB,
       });
+
+      // ✅ Auto-mark guest as ready when they have 11 players selected (only once)
+      const mySide = onlineRoom?.players?.find((p) => p.socketId === socket.id)?.side;
+      const myTeam = mySide === "A" ? teamA : teamB;
+      const playerCount = myTeam?.players?.length || 0;
+      
+      console.log(`📊 Player status - Side: ${mySide}, Players: ${playerCount}/11, Ready flag: ${guestMarkedReady.current}, IsHost: ${isOnlineHost}`);
+      
+      // ✅ AUTO-MARK READY FOR BOTH HOST AND GUEST when they have 11 players
+      if (!guestMarkedReady.current && playerCount === 11) {
+        console.log(`✅ Auto-marking ready with 11 players (${isOnlineHost ? "HOST" : "GUEST"})`);
+        guestMarkedReady.current = true; // Set flag to prevent duplicate calls
+        console.log(`📤 Emitting updateTeamPlayers with ${myTeam.players.length} players`);
+        socket.emit("updateTeamPlayers", {
+          roomCode: onlineRoom.code,
+          teamPlayers: myTeam.players,
+        }, (response) => {
+          console.log("✅ updateTeamPlayers callback received:", response);
+        });
+      }
     } else if (view === "tourn_setup") {
       console.log('📤 Broadcasting tournament teams:', tournTeams);
       socket.emit("tournamentTeamUpdate", {
@@ -356,7 +389,7 @@ const App = () => {
         teams: tournTeams,
       });
     }
-  }, [teamA, teamB, tournTeams, isOnline, onlineRoom, view]);
+  }, [teamA, teamB, tournTeams, isOnline, onlineRoom, view, isOnlineHost]);
 
   // ✅ SYNC TEAMS: Listen for other player's updates
   useEffect(() => {
@@ -667,6 +700,14 @@ const App = () => {
     setView("tourn_hub");
   };
 
+  useEffect(() => {
+    if (isStartingMatch && matchState && isOnlineHost && onlineRoom?.code) {
+      console.log(`📤 Host emitting startMatch for room ${onlineRoom.code}`);
+      socket.emit("startMatch", { roomCode: onlineRoom.code, matchState });
+      setIsStartingMatch(false);
+    }
+  }, [matchState, isStartingMatch, isOnlineHost, onlineRoom]);
+
   // ---------- MATCH STARTERS / ENDERS ----------
 
   const handleStartQuickMatch = () => {
@@ -680,14 +721,24 @@ const App = () => {
     setTossWinner(winner);
     setShowToss(true);
     
+    // Broadcast toss to guest if online
+    if (isOnline) {
+      console.log(`📢 Broadcasting toss winner to guest: ${winner.name}`);
+      socket.emit("broadcastToss", {
+        roomCode: onlineRoom.code,
+        tossWinner: winner.id,
+        tossWinnerName: winner.name,
+      });
+    }
+    
     setTimeout(() => {
       setShowToss(false);
       startQuickMatch(teamA, teamB);
       setMatchTab("live");
       setView("match");
 
-      if (isOnline && isOnlineHost && onlineRoom?.code) {
-        socket.emit("startOnlineMatch", { code: onlineRoom.code });
+      if (isOnline && isOnlineHost) {
+        setIsStartingMatch(true);
       }
     }, 3000);
   };
@@ -720,12 +771,8 @@ const App = () => {
       setMatchTab("live");
       setView("match");
 
-      if (isOnline && isOnlineHost && onlineRoom?.code) {
-        // Emit with fixture info so guests can check if they're involved
-        socket.emit("startOnlineMatch", { 
-          code: onlineRoom.code,
-          fixtureTeams: [fixture.t1, fixture.t2]
-        });
+      if (isOnline && isOnlineHost) {
+        setIsStartingMatch(true);
       }
     }, 3000);
   };
@@ -2325,11 +2372,10 @@ const App = () => {
                     }
 
                     // Create room on server
-                    socket.emit("createRoom", {
-                      name: onlineName.trim(),
-                      mode: onlineGameType || "quick",
-                    });
-
+                                      socket.emit("createRoom", {
+                                        name: onlineName.trim(),
+                                        mode: onlineGameType === "quick" ? "1v1" : onlineGameType,
+                                      });
                     // We rely on roomUpdate to actually move us into the room,
                     // but as a fallback we can optimistically go there:
                     setView("online_menu");

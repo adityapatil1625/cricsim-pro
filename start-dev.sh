@@ -10,6 +10,16 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+echo -e "${YELLOW}[*] Attempting to stop existing Node.js processes on ports 4000 and 5173/5174...${NC}"
+for port in 4000 5173 5174; do
+  PID=$(lsof -t -i :$port)
+  if [ -n "$PID" ]; then
+    kill -9 "$PID"
+    echo -e "${GREEN}    Stopped process $PID on port $port.${NC}"
+  fi
+done
+echo -e "${GREEN}[*] Previous processes stopped (if any).${NC}"
+
 # Check if Node is installed
 if ! command -v node &> /dev/null; then
     echo "❌ Node.js is not installed. Please install it first."

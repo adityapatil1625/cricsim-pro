@@ -239,6 +239,46 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("navigateToQuickSetup", (data) => {
+    try {
+      const { code } = data;
+      const room = rooms.get(code);
+
+      if (room && room.host === socket.id) {
+        io.to(code).emit("navigateToQuickSetup");
+        console.log(`🚀 Navigating room ${code} to quick setup`);
+      }
+    } catch (error) {
+      console.error("❌ Error in navigateToQuickSetup:", error);
+    }
+  });
+
+  socket.on("selectIPLTeam", ({ code, teamId }) => {
+    console.log(`🏟️  Received selectIPLTeam: code=${code}, teamId=${teamId}, socketId=${socket.id}`);
+    const room = rooms.get(code);
+    if (!room) {
+      console.error(`❌ Room not found: ${code}`);
+      return;
+    }
+
+    const player = room.players.find((p) => p.socketId === socket.id);
+    if (player) {
+      const oldTeam = player.iplTeam;
+      if (player.iplTeam === teamId) {
+        player.iplTeam = null;
+      } else {
+        player.iplTeam = teamId;
+      }
+      console.log(`✅ Updated player ${player.name}: ${oldTeam || "None"} → ${player.iplTeam || "None"}`);
+      console.log(`📢 Room ${code} team selection status:`, room.players.map(p => ({ name: p.name, team: p.iplTeam })));
+      console.log(`📢 Broadcasting roomUpdate to ${code}`);
+      io.to(code).emit("roomUpdate", room);
+    } else {
+      console.error(`❌ Player not found: ${socket.id} in room ${code}`);
+      console.error(`Available players:`, room.players.map(p => ({ name: p.name, socketId: p.socketId })));
+    }
+  });
+
   // -------- TEAM SETUP --------
 
   socket.on("updateTeamPlayers", (data, callback) => {
@@ -247,7 +287,10 @@ io.on("connection", (socket) => {
       const room = getOrCreateRoom(roomCode);
       const userInfo = userSockets.get(socket.id);
 
+      console.log(`📥 Received updateTeamPlayers from ${socket.id} in room ${roomCode}`);
+
       if (!userInfo) {
+        console.log(`❌ User ${socket.id} not found in userSockets`);
         if (callback) callback({ success: false, error: "User not in room" });
         return;
       }
@@ -259,14 +302,17 @@ io.on("connection", (socket) => {
         player.isReady = true;
 
         console.log(
-          `🏏 Player ${player.name} set team with ${teamPlayers.length} players`
+          `✅ 🏏 Player ${player.name} marked READY with ${teamPlayers.length} players`
         );
+        console.log(`📊 Room ${roomCode} players ready status:`, room.players.map(p => ({ name: p.name, isReady: p.isReady })));
 
         if (callback) {
           callback({ success: true });
         }
 
         io.to(roomCode).emit("roomUpdate", room);
+      } else {
+        console.log(`❌ Player with socket ${socket.id} not found in room ${roomCode}`);
       }
     } catch (error) {
       console.error("❌ Error in updateTeamPlayers:", error);
@@ -283,8 +329,12 @@ io.on("connection", (socket) => {
       const { roomCode, matchState } = data;
       const room = getOrCreateRoom(roomCode);
 
+      console.log(`🔍 Host attempting to start match in room ${roomCode}`);
+      console.log(`👥 Room players:`, room.players.map(p => ({ name: p.name, ready: p.isReady, socketId: p.socketId })));
+
       // Only host can start match
       if (room.host !== socket.id) {
+        console.log(`❌ Non-host tried to start match. Host: ${room.host}, Requester: ${socket.id}`);
         if (callback)
           callback({ success: false, error: "Only host can start match" });
         return;
@@ -292,7 +342,11 @@ io.on("connection", (socket) => {
 
       // Check all players are ready
       const allReady = room.players.every((p) => p.isReady);
+      console.log(`🔍 All players ready? ${allReady}`);
+      
       if (!allReady) {
+        const notReady = room.players.filter(p => !p.isReady).map(p => p.name);
+        console.log(`❌ Not all players are ready. Not ready: ${notReady.join(", ")}`);
         if (callback)
           callback({ success: false, error: "Not all players are ready" });
         return;
@@ -301,7 +355,9 @@ io.on("connection", (socket) => {
       room.matchState = matchState;
       room.isLive = true;
 
-      console.log(`🎯 Match started in room ${roomCode}`);
+      console.log(`✅ 🎯 Match started in room ${roomCode}`);
+      console.log(`👥 Players in room:`, room.players.map(p => p.socketId));
+      console.log(`📢 Broadcasting matchStarted to room ${roomCode}`);
 
       if (callback) {
         callback({ success: true });
@@ -316,6 +372,26 @@ io.on("connection", (socket) => {
       if (callback) {
         callback({ success: false, error: error.message });
       }
+    }
+  });
+
+  // Broadcast toss result to guest
+  socket.on("broadcastToss", (data) => {
+    try {
+      const { roomCode, tossWinner, tossWinnerName } = data;
+      const room = getOrCreateRoom(roomCode);
+
+      console.log(`📢 Host broadcasting toss result in room ${roomCode}: ${tossWinnerName}`);
+
+      // Send toss info to all players EXCEPT the host (guest)
+      socket.to(roomCode).emit("receiveToss", {
+        tossWinner,
+        tossWinnerName,
+      });
+
+      console.log(`✅ Toss result sent to guest in room ${roomCode}`);
+    } catch (error) {
+      console.error("❌ Error in broadcastToss:", error);
     }
   });
 

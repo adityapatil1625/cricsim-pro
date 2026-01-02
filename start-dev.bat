@@ -7,6 +7,18 @@ echo CricSim Pro - Local Development Startup
 echo ========================================
 echo.
 
+echo [*] Attempting to stop existing Node.js processes on ports 4000 and 5173/5174...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :4000') do (
+    if %%a neq "" taskkill /PID %%a /F >nul 2>nul
+)
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :5173') do (
+    if %%a neq "" taskkill /PID %%a /F >nul 2>nul
+)
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :5174') do (
+    if %%a neq "" taskkill /PID %%a /F >nul 2>nul
+)
+echo [*] Previous processes stopped (if any).
+
 REM Check if Node is installed
 where node >nul 2>nul
 if %ERRORLEVEL% NEQ 0 (
