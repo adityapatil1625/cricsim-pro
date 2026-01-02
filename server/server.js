@@ -197,8 +197,9 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Add player to room
-      const side = room.players.length === 0 ? "A" : "B";
+      // Add player to room - assign sides: A, B, C, D, etc.
+      const sides = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+      const side = sides[room.players.length] || "X";
       const newPlayer = {
         socketId: socket.id,
         playerId: `player_${socket.id.slice(0, 8)}`,
@@ -207,6 +208,8 @@ io.on("connection", (socket) => {
         teamPlayers: [],
         isReady: false,
       };
+      
+      console.log(`👤 Assigning side: ${side} to player ${playerName} (position ${room.players.length})`);
 
       room.players.push(newPlayer);
       userSockets.set(socket.id, {
@@ -250,6 +253,48 @@ io.on("connection", (socket) => {
       }
     } catch (error) {
       console.error("❌ Error in navigateToQuickSetup:", error);
+    }
+  });
+
+  socket.on("navigateToTournamentSetup", (data) => {
+    try {
+      const { code } = data;
+      const room = rooms.get(code);
+
+      if (room && room.host === socket.id) {
+        io.to(code).emit("navigateToTournamentSetup");
+        console.log(`🎯 Navigating room ${code} to tournament setup`);
+      }
+    } catch (error) {
+      console.error("❌ Error in navigateToTournamentSetup:", error);
+    }
+  });
+
+  socket.on("navigateToTournamentHub", (data) => {
+    try {
+      const { code } = data;
+      const room = rooms.get(code);
+
+      if (room && room.host === socket.id) {
+        io.to(code).emit("navigateToTournamentHub");
+        console.log(`📊 Navigating room ${code} to tournament hub`);
+      }
+    } catch (error) {
+      console.error("❌ Error in navigateToTournamentHub:", error);
+    }
+  });
+
+  socket.on("navigateToAuctionLobby", (data) => {
+    try {
+      const { code } = data;
+      const room = rooms.get(code);
+
+      if (room && room.host === socket.id) {
+        io.to(code).emit("navigateToAuctionLobby");
+        console.log(`🔨 Navigating room ${code} to auction lobby`);
+      }
+    } catch (error) {
+      console.error("❌ Error in navigateToAuctionLobby:", error);
     }
   });
 
@@ -319,6 +364,114 @@ io.on("connection", (socket) => {
       if (callback) {
         callback({ success: false, error: error.message });
       }
+    }
+  });
+
+  socket.on("tournamentTeamUpdate", (data) => {
+    try {
+      const { code, teams } = data;
+      const room = rooms.get(code);
+
+      if (!room) return;
+
+      // Find the sending player and update their team players
+      const senderPlayer = room.players.find(p => p.socketId === socket.id);
+      if (senderPlayer && teams.length > 0) {
+        // The first (and only) team in the array is the sender's team
+        const theirTeam = teams[0];
+        if (theirTeam.id === senderPlayer.side) {
+          // Store their team's players in teamPlayers for validation
+          senderPlayer.teamPlayers = theirTeam.players || [];
+          senderPlayer.isReady = (theirTeam.players?.length || 0) === 11;
+          console.log(`🏏 Updated ${senderPlayer.name}'s team: ${senderPlayer.teamPlayers.length}/11 players, isReady: ${senderPlayer.isReady}`);
+        }
+      }
+
+      // Broadcast team update to all players in room
+      io.to(code).emit("tournamentTeamUpdate", { teams });
+      console.log(`🏏 Tournament teams updated in room ${code}. Ready status:`, room.players.map(p => ({ name: p.name, ready: p.isReady, players: p.teamPlayers.length })));
+    } catch (error) {
+      console.error("❌ Error in tournamentTeamUpdate:", error);
+    }
+  });
+
+  socket.on("generateTournamentFixtures", (data, callback) => {
+    try {
+      const { code } = data;
+      const room = rooms.get(code);
+
+      if (!room || room.host !== socket.id) {
+        console.log(`❌ Only host can generate fixtures`);
+        if (callback) callback({ success: false, error: "Only host can generate fixtures" });
+        return;
+      }
+
+      // Validate that all players have selected exactly 11 players
+      console.log(`🏆 Validating teams for tournament in room ${code}`);
+      const incompletePlayers = room.players.filter(p => {
+        const playerCount = (p.teamPlayers && p.teamPlayers.length) || 0;
+        console.log(`  Player ${p.name}: ${playerCount}/11 players`);
+        return playerCount !== 11;
+      });
+
+      if (incompletePlayers.length > 0) {
+        const incompleteNames = incompletePlayers.map(p => `${p.name} (${(p.teamPlayers && p.teamPlayers.length) || 0}/11)`).join(", ");
+        const errorMsg = `Not all players have selected 11 players. Incomplete: ${incompleteNames}`;
+        console.log(`❌ ${errorMsg}`);
+        if (callback) callback({ success: false, error: errorMsg });
+        // Broadcast error to all players in room
+        io.to(code).emit("tournamentStartError", { error: errorMsg });
+        return;
+      }
+
+      console.log(`✅ All players have 11 players selected, generating fixtures...`);
+
+      // Generate round-robin fixtures for all teams
+      const fixtures = [];
+      let fixtureId = 1;
+
+      // Create all possible match combinations (round-robin)
+      for (let i = 0; i < room.players.length; i++) {
+        for (let j = i + 1; j < room.players.length; j++) {
+          fixtures.push({
+            id: fixtureId,
+            t1: room.players[i].side,  // Team A
+            t2: room.players[j].side,  // Team B
+            winner: null,
+            played: false,
+            stage: "league"
+          });
+          fixtureId++;
+        }
+      }
+
+      console.log(`🏆 Generated ${fixtures.length} fixtures for room ${code}`, fixtures);
+
+      if (callback) {
+        callback({ success: true, fixtureCount: fixtures.length });
+      }
+
+      // Broadcast generated fixtures to all players
+      io.to(code).emit("tournamentFixturesGenerated", { fixtures });
+    } catch (error) {
+      console.error("❌ Error in generateTournamentFixtures:", error);
+      if (callback) {
+        callback({ success: false, error: error.message });
+      }
+    }
+  });
+
+  socket.on("startAuction", (data) => {
+    try {
+      const { code } = data;
+      const room = rooms.get(code);
+
+      if (!room || room.host !== socket.id) return;
+
+      io.to(code).emit("startAuction");
+      console.log(`🔨 Auction started in room ${code}`);
+    } catch (error) {
+      console.error("❌ Error in startAuction:", error);
     }
   });
 
@@ -400,12 +553,7 @@ io.on("connection", (socket) => {
       const { roomCode, matchState } = data;
       const room = getOrCreateRoom(roomCode);
 
-      // Only host can update match
-      if (room.host !== socket.id) {
-        console.warn("⚠️  Non-host tried to update match state");
-        return;
-      }
-
+      // Any player in the room can update match state
       room.matchState = matchState;
 
       // Broadcast update to all players in room
@@ -428,8 +576,7 @@ io.on("connection", (socket) => {
       const { roomCode, matchState, commentary } = data;
       const room = getOrCreateRoom(roomCode);
 
-      if (room.host !== socket.id) return;
-
+      // Any player in room can bowl
       io.to(roomCode).emit("ballBowled", {
         matchState,
         commentary,
@@ -446,8 +593,7 @@ io.on("connection", (socket) => {
       const { roomCode, matchState } = data;
       const room = getOrCreateRoom(roomCode);
 
-      if (room.host !== socket.id) return;
-
+      // Any player in room can skip over
       io.to(roomCode).emit("overSkipped", {
         matchState,
         timestamp: Date.now(),
@@ -463,8 +609,7 @@ io.on("connection", (socket) => {
       const { roomCode, matchState } = data;
       const room = getOrCreateRoom(roomCode);
 
-      if (room.host !== socket.id) return;
-
+      // Any player can trigger innings break
       io.to(roomCode).emit("inningsChanged", {
         matchState,
         timestamp: Date.now(),
@@ -480,8 +625,7 @@ io.on("connection", (socket) => {
       const { roomCode, matchState } = data;
       const room = getOrCreateRoom(roomCode);
 
-      if (room.host !== socket.id) return;
-
+      // Any player in room can end match
       room.isLive = false;
 
       io.to(roomCode).emit("matchEnded", {
@@ -492,6 +636,54 @@ io.on("connection", (socket) => {
       console.log(`🏁 Match ended in room ${roomCode}`);
     } catch (error) {
       console.error("❌ Error in endMatch:", error);
+    }
+  });
+
+  // Broadcast tournament results update
+  socket.on("tournamentResultsUpdate", (data) => {
+    try {
+      const { code, fixtures, tournTeams, phase } = data;
+      const room = rooms.get(code);
+
+      // Only host can broadcast tournament results
+      if (!room || room.host !== socket.id) {
+        console.log(`❌ Non-host tried to update tournament results. Host: ${room?.host}, Requester: ${socket.id}`);
+        return;
+      }
+
+      // Broadcast updated tournament data to ALL players in room
+      io.to(code).emit("tournamentResultsUpdate", {
+        fixtures,
+        tournTeams,
+        phase,
+        timestamp: Date.now(),
+      });
+
+      console.log(`📊 Tournament results updated and broadcast to room ${code}`);
+      console.log(`   Fixtures: ${fixtures?.length || 0}, Teams: ${tournTeams?.length || 0}, Phase: ${phase}`);
+    } catch (error) {
+      console.error("❌ Error in tournamentResultsUpdate:", error);
+    }
+  });
+
+  // Broadcast tournament hub navigation
+  socket.on("navigateToTournamentHub", (data) => {
+    try {
+      const { code } = data;
+      const room = rooms.get(code);
+
+      // Only host can trigger navigation
+      if (!room || room.host !== socket.id) {
+        console.log(`❌ Non-host tried to navigate to tournament hub. Host: ${room?.host}, Requester: ${socket.id}`);
+        return;
+      }
+
+      // Broadcast navigation command to ALL players in room
+      io.to(code).emit("navigateToTournamentHub");
+
+      console.log(`🏠 All players in room ${code} navigating to tournament hub`);
+    } catch (error) {
+      console.error("❌ Error in navigateToTournamentHub:", error);
     }
   });
 

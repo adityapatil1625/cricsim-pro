@@ -421,7 +421,7 @@ const MatchCenter = ({
                 <h3 className="font-broadcast text-2xl text-white mb-2 border-b border-white/10 pb-1">
                     Full Match Commentary
                 </h3>
-                <div className="overflow-y-auto custom-scrollbar flex-1 space-y-2 p-2">
+                <div className="overflow-y-auto custom-scrollbar space-y-2 p-2 h-[400px]">
                     {[...matchState.commentary].reverse().map((line, i) => (
                         <div
                             key={i}
@@ -717,12 +717,12 @@ const MatchCenter = ({
                         </div>
 
                         {/* Live feed */}
-                        <div className="flex-1 glass-panel rounded-xl p-0 overflow-hidden flex flex-col min-h-0">
+                        <div className="flex-shrink-0 h-64 glass-panel rounded-xl p-0 overflow-hidden flex flex-col">
                             <div className="flex-shrink-0 p-3 bg-slate-800/80 border-b border-slate-700 text-xs font-bold uppercase tracking-widest text-slate-400">
-                                Live Feed
+                                Live Feed (Latest 6)
                             </div>
                             <div className="flex-1 overflow-y-auto p-4 space-y-3 text-sm text-slate-300 custom-scrollbar scroll-smooth">
-                                {matchState.commentary.slice(-20).map((line, i) => (
+                                {matchState.commentary.slice(-6).map((line, i) => (
                                     <div
                                         key={i}
                                         className={`border-b border-slate-800/50 pb-2 last:border-0 ${

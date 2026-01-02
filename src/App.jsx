@@ -96,6 +96,7 @@ const App = () => {
   const [tossWinner, setTossWinner] = useState(null); // Team that won toss
   const [newTeamName, setNewTeamName] = useState("");
   const [activeTeamSelect, setActiveTeamSelect] = useState(null);
+  const [tournamentStartError, setTournamentStartError] = useState(null); // Tournament start validation error
 
   const [matchTab, setMatchTab] = useState("live"); // live | scorecard | commentary
 
@@ -133,6 +134,11 @@ const App = () => {
   // Derived online flags
   const isOnline = !!onlineRoom;
   const isOnlineHost = isOnline && onlineRoom?.host === socket.id;
+
+  // Expose socket globally for MatchView wrapper functions
+  useEffect(() => {
+    window.__socket = socket;
+  }, []);
 
   // 🔍 Debug logging
   useEffect(() => {
@@ -181,25 +187,59 @@ const App = () => {
     function handleNavigateTournamentSetup() {
       if (!onlineRoom?.players) return;
       
-      // Initialize teams for all players with stats
-      const teams = onlineRoom.players.map(p => {
-        const iplTeam = IPL_TEAMS.find(t => t.id === p.iplTeam);
-        return {
-          id: p.side,
-          name: iplTeam ? iplTeam.name : `Team ${p.side}`,
-          iplTeamId: p.iplTeam,
-          players: [],
-          played: 0,
-          won: 0,
-          pts: 0,
-          nrr: 0,
-          runsScored: 0,
-          oversFaced: 0,
-          runsConceded: 0,
-          oversBowled: 0
-        };
+      console.log('📍 handleNavigateTournamentSetup called');
+      console.log('  Current onlineRoom.players:', onlineRoom.players.map(p => ({ name: p.name, side: p.side })));
+      
+      // Initialize/update tournament teams based on current players in room
+      setTournTeams(prevTeams => {
+        // Get unique sides from current players
+        const uniqueSides = [...new Set(onlineRoom.players.map(p => p.side))];
+        const prevTeamIds = new Set(prevTeams.map(t => t.id));
+        
+        console.log(`  prevTeams.length: ${prevTeams.length}, uniqueSides.length: ${uniqueSides.length}`);
+        console.log(`  uniqueSides: [${uniqueSides.join(', ')}]`);
+        console.log(`  prevTeamIds: [${Array.from(prevTeamIds).join(', ')}]`);
+        
+        // Check if number of teams changed (new player joined)
+        if (uniqueSides.length !== prevTeams.length) {
+          console.log(`🎯 Player count changed: was ${prevTeams.length}, now ${uniqueSides.length} - reinitializing teams`);
+          
+          // Initialize teams for unique sides
+          const teams = uniqueSides.map(side => {
+            // Check if this team already exists in prevTeams and preserve its players
+            const existingTeam = prevTeams.find(t => t.id === side);
+            if (existingTeam) {
+              console.log(`  📌 Keeping existing team ${side} with ${existingTeam.players.length} players`);
+              return existingTeam;
+            }
+            
+            const player = onlineRoom.players.find(p => p.side === side);
+            const iplTeam = IPL_TEAMS.find(t => t.id === player?.iplTeam);
+            console.log(`  ✨ Creating new team ${side} (player: ${player?.name || 'unknown'})`);
+            return {
+              id: side,
+              name: iplTeam ? iplTeam.name : `Team ${side}`,
+              iplTeamId: player?.iplTeam,
+              players: [],
+              played: 0,
+              won: 0,
+              pts: 0,
+              nrr: 0,
+              runsScored: 0,
+              oversFaced: 0,
+              runsConceded: 0,
+              oversBowled: 0
+            };
+          });
+          console.log('🎯 Final tournament teams:', teams.map(t => ({ id: t.id, playerCount: t.players.length })));
+          return teams;
+        } else {
+          console.log(`✅ No change in player count, keeping existing teams`);
+        }
+        
+        // No change in player count, keep existing teams
+        return prevTeams;
       });
-      setTournTeams(teams);
       
       // Set active team to current player's team
       const mySide = onlineRoom?.players?.find((p) => p.socketId === socket.id)?.side || "A";
@@ -211,7 +251,17 @@ const App = () => {
       console.log("🏆 Received tournament fixtures:", fixtures);
       setFixtures(fixtures);
       setTournPhase("league");
+      setTournamentStartError(null); // Clear any previous errors
       setView("tourn_hub");
+    }
+    
+    function handleTournamentStartError({ error }) {
+      console.error("❌ Tournament start error:", error);
+      setTournamentStartError(error);
+      // Auto-clear error after 5 seconds
+      setTimeout(() => {
+        setTournamentStartError(null);
+      }, 5000);
     }
     
     function handleNavigateToTournamentHub() {
@@ -229,10 +279,21 @@ const App = () => {
     }
     
     function handleTournamentResultsUpdate({ fixtures: updatedFixtures, tournTeams: updatedTeams, phase }) {
-      console.log("📊 Received tournament results update", { fixtures: updatedFixtures, teams: updatedTeams, phase });
-      setFixtures(updatedFixtures);
-      setTournTeams(updatedTeams);
-      if (phase) setTournPhase(phase);
+      console.log("📊 Received tournament results update");
+      console.log(`   Fixtures: ${updatedFixtures?.length || 0}`, updatedFixtures?.map(f => ({ id: f.id, played: f.played, winner: f.winner })));
+      console.log(`   Teams: ${updatedTeams?.length || 0}`, updatedTeams?.map(t => ({ id: t.id, pts: t.pts, won: t.won, nrr: t.nrr })));
+      console.log(`   Phase: ${phase}`);
+      
+      if (updatedFixtures && updatedFixtures.length > 0) {
+        setFixtures(updatedFixtures);
+      }
+      if (updatedTeams && updatedTeams.length > 0) {
+        setTournTeams(updatedTeams);
+      }
+      if (phase) {
+        setTournPhase(phase);
+      }
+      console.log(`✅ Tournament state updated from broadcast`);
     }
 
     function handleReceiveToss({ tossWinner, tossWinnerName }) {
@@ -256,6 +317,7 @@ const App = () => {
     socket.on("navigateToAuctionLobby", handleNavigateToAuctionLobby);
     socket.on("startAuction", handleStartAuction);
     socket.on("tournamentFixturesGenerated", handleTournamentFixturesGenerated);
+    socket.on("tournamentStartError", handleTournamentStartError);
     socket.on("navigateToTournamentHub", handleNavigateToTournamentHub);
     socket.on("tournamentResultsUpdate", handleTournamentResultsUpdate);
     socket.on("receiveToss", handleReceiveToss);
@@ -266,6 +328,7 @@ const App = () => {
       socket.off("navigateToAuctionLobby", handleNavigateToAuctionLobby);
       socket.off("startAuction", handleStartAuction);
       socket.off("tournamentFixturesGenerated", handleTournamentFixturesGenerated);
+      socket.off("tournamentStartError", handleTournamentStartError);
       socket.off("navigateToTournamentHub", handleNavigateToTournamentHub);
       socket.off("tournamentResultsUpdate", handleTournamentResultsUpdate);
       socket.off("receiveToss", handleReceiveToss);
@@ -301,9 +364,42 @@ const App = () => {
       // Only sync if ballsBowled changed to reduce jitter
       if (matchState && receivedState.ballsBowled === matchState.ballsBowled) return;
       
+      console.log(`📊 Guest received matchStateUpdated event`);
       syncMatchState(receivedState);
       setMatchTab("live");
       setView("match"); // Guests navigate here when they receive first state
+    }
+
+    function handleBallBowled(data) {
+      if (!data?.matchState) return;
+      console.log(`🏏 Guest received ballBowled event`);
+      syncMatchState(data.matchState);
+      setMatchTab("live");
+      setView("match");
+    }
+
+    function handleOverSkipped(data) {
+      if (!data?.matchState) return;
+      console.log(`⏭️ Guest received overSkipped event`);
+      syncMatchState(data.matchState);
+      setMatchTab("live");
+      setView("match");
+    }
+
+    function handleInningsChanged(data) {
+      if (!data?.matchState) return;
+      console.log(`🔄 Guest received inningsChanged event`);
+      syncMatchState(data.matchState);
+      setMatchTab("live");
+      setView("match");
+    }
+
+    function handleMatchEnded(data) {
+      if (!data?.matchState) return;
+      console.log(`✅ Guest received matchEnded event`);
+      syncMatchState(data.matchState);
+      setMatchTab("results");
+      setView("match");
     }
 
     function handleEndOnlineMatch() {
@@ -317,31 +413,49 @@ const App = () => {
     }
 
     socket.on("matchStarted", handleMatchStarted);
+    socket.on("matchStateUpdated", handleMatchStateUpdate);
+    socket.on("ballBowled", handleBallBowled);
+    socket.on("overSkipped", handleOverSkipped);
+    socket.on("inningsChanged", handleInningsChanged);
+    socket.on("matchEnded", handleMatchEnded);
     socket.on("matchStateUpdate", handleMatchStateUpdate);
     socket.on("endOnlineMatch", handleEndOnlineMatch);
 
     return () => {
       socket.off("matchStarted", handleMatchStarted);
+      socket.off("matchStateUpdated", handleMatchStateUpdate);
+      socket.off("ballBowled", handleBallBowled);
+      socket.off("overSkipped", handleOverSkipped);
+      socket.off("inningsChanged", handleInningsChanged);
+      socket.off("matchEnded", handleMatchEnded);
       socket.off("matchStateUpdate", handleMatchStateUpdate);
       socket.off("endOnlineMatch", handleEndOnlineMatch);
     };
   }, [resetMatch, syncMatchState]);
 
-  // ---------- HOST: BROADCAST matchState ON CHANGE ----------
+  // ---------- BROADCAST matchState ON CHANGE (whoever is bowling) ----------
   useEffect(() => {
     if (!isOnline || view !== "match") return;
     if (!matchState || !onlineRoom?.code) return;
 
-    // Only emit if this player has control (is bowling)
+    // Get current player's side and team
     const mySide = onlineRoom.players?.find((p) => p.socketId === socket.id)?.side;
+    const teamASideId = matchState.teamA?.id;
+    const teamBSideId = matchState.teamB?.id;
+    const mySideTeamId = mySide === "A" ? teamASideId : mySide === "B" ? teamBSideId : null;
+    
+    // Only broadcast if I have control (my team is bowling)
     const bowlingTeamId = matchState.bowlingTeam?.id;
-    if (mySide !== bowlingTeamId) return;
+    const hasControl = mySideTeamId === bowlingTeamId;
+    
+    if (!hasControl) return; // Don't broadcast if I'm not controlling
 
-    socket.emit("matchStateUpdate", {
-      code: onlineRoom.code,
+    console.log(`📢 ${isOnlineHost ? "Host" : "Guest"} broadcasting matchState update - Balls: ${matchState.ballsBowled}`);
+    socket.emit("updateMatchState", {
+      roomCode: onlineRoom.code,
       matchState,
     });
-  }, [matchState?.ballsBowled, matchState?.isMatchOver, isOnline, view, onlineRoom]);
+  }, [matchState?.ballsBowled, matchState?.isMatchOver, matchState?.bowlingTeam?.id, matchState?.innings, isOnline, view, onlineRoom, socket.id]);
 
   // Reset guest ready flag when leaving online room
   useEffect(() => {
@@ -383,11 +497,17 @@ const App = () => {
         });
       }
     } else if (view === "tourn_setup") {
-      console.log('📤 Broadcasting tournament teams:', tournTeams);
-      socket.emit("tournamentTeamUpdate", {
-        code: onlineRoom.code,
-        teams: tournTeams,
-      });
+      // Only broadcast the current player's own team for tournament setup
+      const mySide = onlineRoom?.players?.find((p) => p.socketId === socket.id)?.side;
+      const myTeam = tournTeams.find(t => t.id === mySide);
+      
+      if (myTeam) {
+        console.log(`📤 Broadcasting MY tournament team (${mySide}):`, myTeam);
+        socket.emit("tournamentTeamUpdate", {
+          code: onlineRoom.code,
+          teams: [myTeam], // Only send my own team
+        });
+      }
     }
   }, [teamA, teamB, tournTeams, isOnline, onlineRoom, view, isOnlineHost]);
 
@@ -422,25 +542,33 @@ const App = () => {
         const updatedTeams = [...prevTeams];
         
         remoteTeams.forEach(remoteTeam => {
-          // Don't update my own team
-          if (remoteTeam.id === mySide) return;
+          // Don't update my own team (it should be mine from local state)
+          if (remoteTeam.id === mySide) {
+            console.log('📥 Skipping own team (received from my broadcast):', mySide);
+            return;
+          }
           
+          // Find team in updated array and update or add it
           const index = updatedTeams.findIndex(t => t.id === remoteTeam.id);
           if (index >= 0) {
+            console.log('📥 Updating existing team:', remoteTeam.id, 'with', remoteTeam.players?.length || 0, 'players');
             updatedTeams[index] = remoteTeam;
           } else {
+            console.log('📥 Adding new team:', remoteTeam.id, 'with', remoteTeam.players?.length || 0, 'players');
             updatedTeams.push(remoteTeam);
           }
         });
         
+        // No need for deduplication anymore since we only broadcast single teams
         console.log('📥 Updated teams:', updatedTeams);
         return updatedTeams;
       });
       
-      // Reset flag after state update
+      // Reset flag after state update - use shorter delay
       setTimeout(() => {
         isReceivingTeamUpdate.current = false;
-      }, 50);
+        console.log('🟢 Broadcast flag cleared');
+      }, 10);
     }
 
     socket.on("teamUpdate", handleTeamUpdate);
@@ -517,7 +645,7 @@ const App = () => {
       return;
     }
 
-    if (view === "tourn_draft") {
+    if (view === "tourn_draft" || view === "tourn_setup") {
       setTournTeams((prev) =>
           prev.map((t) => {
             if (t.id !== teamId) return t;
@@ -765,6 +893,16 @@ const App = () => {
     setTossWinner(winner);
     setShowToss(true);
     
+    // Broadcast toss to guests if online
+    if (isOnline) {
+      console.log(`📢 Broadcasting tournament toss winner to guests: ${winner.name}`);
+      socket.emit("broadcastToss", {
+        roomCode: onlineRoom.code,
+        tossWinner: winner.id,
+        tossWinnerName: winner.name,
+      });
+    }
+    
     setTimeout(() => {
       setShowToss(false);
       startTournamentMatch(fixture.id, t1, t2);
@@ -781,6 +919,7 @@ const App = () => {
     if (matchState?.mode === "tourn") {
       if (isOnline && onlineRoom?.code) {
         if (isOnlineHost) {
+          console.log(`🏁 Tournament match ended. Host calculating results...`);
           // Host: calculate and broadcast updates
           const { fixtureId, winner, innings1, innings2, batsmanStats, bowlerStats } = matchState;
           
@@ -834,6 +973,8 @@ const App = () => {
             return updates;
           });
           
+          console.log(`📋 Updated results:`, updatedTeams.map(t => ({ id: t.id, played: t.played, pts: t.pts, nrr: t.nrr })));
+          
           // Update local state
           setFixtures(updatedFixtures);
           setTournTeams(updatedTeams);
@@ -841,6 +982,7 @@ const App = () => {
           // Check if league phase is complete
           const allLeaguePlayed = updatedFixtures.every(f => f.played);
           if (allLeaguePlayed && tournPhase === "league") {
+            console.log(`🏆 League phase complete, generating knockouts`);
             // Generate knockout fixtures
             const sorted = [...updatedTeams].sort((a, b) => {
               if (b.pts !== a.pts) return b.pts - a.pts;
@@ -872,6 +1014,7 @@ const App = () => {
             setFixtures(allFixtures);
             
             // Broadcast knockout fixtures
+            console.log(`📢 Broadcasting knockout fixtures`);
             socket.emit("tournamentResultsUpdate", {
               code: onlineRoom.code,
               fixtures: allFixtures,
@@ -879,6 +1022,7 @@ const App = () => {
               phase: numTeams <= 4 ? "final" : "semi"
             });
           } else if (allLeaguePlayed && tournPhase === "semi") {
+            console.log(`🏆 Semi-finals complete, generating final`);
             // Generate final from semi winners
             const semi1Winner = updatedFixtures.find(f => f.id === "semi-1")?.winner;
             const semi2Winner = updatedFixtures.find(f => f.id === "semi-2")?.winner;
@@ -896,6 +1040,7 @@ const App = () => {
               setFixtures(allFixtures);
               setTournPhase("final");
               
+              console.log(`📢 Broadcasting final fixture`);
               socket.emit("tournamentResultsUpdate", {
                 code: onlineRoom.code,
                 fixtures: allFixtures,
@@ -904,8 +1049,10 @@ const App = () => {
               });
             }
           } else if (allLeaguePlayed && tournPhase === "final") {
+            console.log(`🏆 Tournament complete!`);
             // Tournament complete
             setTournPhase("complete");
+            console.log(`📢 Broadcasting tournament complete`);
             socket.emit("tournamentResultsUpdate", {
               code: onlineRoom.code,
               fixtures: updatedFixtures,
@@ -913,18 +1060,22 @@ const App = () => {
               phase: "complete"
             });
           } else {
-            // Broadcast regular update
+            // Broadcast regular update for each league match
+            console.log(`📢 Broadcasting tournament results update after match ${fixtureId}`);
             socket.emit("tournamentResultsUpdate", {
               code: onlineRoom.code,
               fixtures: updatedFixtures,
               tournTeams: updatedTeams
             });
           }
-          // Navigate everyone to hub
+          
+          // Navigate everyone to hub AFTER broadcasting results
+          console.log(`📢 Broadcasting navigation to tournament hub`);
           socket.emit("navigateToTournamentHub", { code: onlineRoom.code });
         }
         
         // Everyone (including host) navigates immediately
+        console.log(`✅ Guest navigating to tournament hub`);
         resetMatch();
         setView("tourn_hub");
       } else {
@@ -1142,7 +1293,7 @@ const App = () => {
         ];
 
     return (
-        <div className="min-h-screen w-full flex flex-col bg-slate-950 relative overflow-hidden">
+        <div className="fixed inset-0 w-full flex flex-col bg-slate-950 overflow-hidden">
           <div className="relative z-10 w-full px-8 py-6 flex justify-between items-end border-b border-white/5 bg-slate-950/80 backdrop-blur-sm flex-shrink-0">
             <div>
               <h1 className="text-6xl font-broadcast text-white leading-none drop-shadow-lg">
@@ -1210,7 +1361,7 @@ const App = () => {
           </div>
 
           <div className="relative z-10 flex-1 flex p-6 gap-6 min-h-0 overflow-hidden">
-            <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 h-full">
               <PlayerSearch activeTeam={activeTeamSelect} onAddPlayer={handleAddToActiveTeam} />
               {!activeTeamSelect && (
                 <div className="mt-4 p-4 bg-blue-900/30 border border-blue-700 rounded-lg text-center">
@@ -1350,7 +1501,7 @@ const App = () => {
       }
       
       return (
-          <div className="min-h-screen w-full flex flex-col bg-slate-950 relative overflow-hidden">
+          <div className="fixed inset-0 w-full flex flex-col bg-slate-950 overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/10 via-slate-950 to-slate-950" />
             
             {/* Header */}
@@ -1379,7 +1530,7 @@ const App = () => {
             {/* Main Content */}
             <div className="relative z-10 flex-1 flex px-8 gap-6 min-h-0 overflow-hidden pb-6">
               {/* Player Pool */}
-              <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 flex flex-col min-h-0 h-full">
                 <PlayerSearch activeTeam={mySide} onAddPlayer={handleAddToActiveTeam} />
               </div>
 
@@ -1421,6 +1572,14 @@ const App = () => {
                                       return newTeam;
                                     });
                                     console.log('🎯 New tournTeams:', updated);
+                                    
+                                    // Immediately broadcast the updated teams
+                                    console.log('📤 Auto-select triggering immediate broadcast:', updated);
+                                    socket.emit("tournamentTeamUpdate", {
+                                      code: onlineRoom.code,
+                                      teams: updated,
+                                    });
+                                    
                                     return updated;
                                   });
                                 }}
@@ -1456,9 +1615,18 @@ const App = () => {
             </div>
 
             {/* Footer */}
-            <div className="relative z-10 flex justify-between items-center px-8 py-6 border-t border-white/5 flex-shrink-0">
-              <button
-                  onClick={() => setView("online_menu")}
+            <div className="relative z-10 flex flex-col px-8 py-6 border-t border-white/5 flex-shrink-0">
+              {/* Error Message Display */}
+              {tournamentStartError && (
+                <div className="mb-4 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-sm">
+                  <p className="font-semibold">❌ Cannot Start Tournament</p>
+                  <p className="mt-1">{tournamentStartError}</p>
+                </div>
+              )}
+              
+              <div className="flex justify-between items-center">
+                <button
+                    onClick={() => setView("online_menu")}
                   className="text-slate-400 hover:text-white px-6 py-2 transition-colors uppercase tracking-widest text-xs font-bold"
               >
                 ← Back
@@ -1468,20 +1636,68 @@ const App = () => {
                       onClick={() => {
                         // Small delay to ensure all state updates are complete
                         setTimeout(() => {
-                          console.log('🔍 Tournament Teams:', tournTeams);
-                          console.log('🔍 Online Room Players:', onlineRoom.players);
+                          console.log('=== START TOURNAMENT VALIDATION ===');
+                          console.log('🔍 My Side:', mySide);
+                          console.log('🔍 Tournament Teams count:', tournTeams.length);
+                          
+                          // Log each team explicitly
+                          tournTeams.forEach((t, idx) => {
+                            console.log(`  Team ${idx}: id=${t.id}, players=${t.players?.length || 0}`);
+                          });
+                          
+                          console.log('🔍 Online Room Players:', onlineRoom.players.length);
+                          onlineRoom.players.forEach((p, idx) => {
+                            console.log(`  Player ${idx}: name=${p.name}, side=${p.side}`);
+                          });
                           
                           // Check if all players have 11 players
                           const playerSides = onlineRoom.players.map(p => p.side);
-                          const playerTeams = tournTeams.filter(t => playerSides.includes(t.id));
-                          
                           console.log('🔍 Player Sides:', playerSides);
-                          console.log('🔍 Player Teams:', playerTeams);
-                          console.log('🔍 Team Player Counts:', playerTeams.map(t => ({ id: t.id, count: t.players?.length || 0 })));
+                          console.log('🔍 TournTeams IDs:', tournTeams.map(t => t.id));
+                          
+                          // Ensure all player sides have corresponding teams (create empty ones if needed)
+                          const allTeams = [...tournTeams];
+                          playerSides.forEach(side => {
+                            if (!allTeams.find(t => t.id === side)) {
+                              console.log(`⚠️ Creating missing team for side: ${side}`);
+                              allTeams.push({
+                                id: side,
+                                name: `Team ${side}`,
+                                players: [],
+                                played: 0,
+                                won: 0,
+                                pts: 0,
+                                nrr: 0,
+                                runsScored: 0,
+                                oversFaced: 0,
+                                runsConceded: 0,
+                                oversBowled: 0
+                              });
+                            }
+                          });
+                          
+                          const playerTeams = allTeams.filter(t => playerSides.includes(t.id));
+                          
+                          console.log('🔍 Player Sides to validate:', playerSides);
+                          console.log('🔍 Filtered teams for validation:', playerTeams.length);
+                          playerTeams.forEach((t, idx) => {
+                            console.log(`  Filtered Team ${idx}: id=${t.id}, players=${t.players?.length || 0}`);
+                          });
+                          
+                          // Make sure we have exactly matching teams
+                          if (playerTeams.length !== playerSides.length) {
+                            alert(`Error: Expected ${playerSides.length} teams but found ${playerTeams.length}`);
+                            return;
+                          }
                           
                           const allReady = playerTeams.length > 0 && playerTeams.every(t => (t.players?.length || 0) === 11);
                           
                           console.log('🔍 All Ready?', allReady);
+                          if (!allReady) {
+                            playerTeams.forEach(t => {
+                              console.log(`  Team ${t.id}: ${t.players?.length || 0}/11 players`);
+                            });
+                          }
                           
                           if (!allReady) {
                             const incomplete = playerTeams.filter(t => (t.players?.length || 0) !== 11);
@@ -1491,6 +1707,11 @@ const App = () => {
                           // Generate fixtures
                           socket.emit("generateTournamentFixtures", {
                             code: onlineRoom.code,
+                          }, (response) => {
+                            console.log("📦 generateTournamentFixtures callback:", response);
+                            if (!response.success) {
+                              setTournamentStartError(response.error);
+                            }
                           });
                         }, 100);
                       }}
@@ -1503,6 +1724,7 @@ const App = () => {
                     Waiting for host to start tournament...
                   </p>
               )}
+              </div>
             </div>
           </div>
       );
@@ -1614,7 +1836,7 @@ const App = () => {
     const teams = tournTeams;
 
     return (
-        <div className="min-h-screen w-full flex flex-col bg-slate-950 relative overflow-hidden">
+        <div className="fixed inset-0 w-full flex flex-col bg-slate-950 overflow-hidden">
           <div className="relative z-10 w-full px-8 py-6 flex justify-between items-end border-b border-white/5 bg-slate-950/80 backdrop-blur-sm flex-shrink-0">
             <div>
               <h1 className="text-6xl font-broadcast text-white leading-none drop-shadow-lg">
@@ -1641,7 +1863,7 @@ const App = () => {
           </div>
 
           <div className="relative z-10 flex-1 flex p-6 gap-6 min-h-0 overflow-hidden">
-            <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 h-full">
               <PlayerSearch activeTeam={activeTeamSelect} onAddPlayer={handleAddToActiveTeam} />
             </div>
 
@@ -2556,12 +2778,24 @@ const App = () => {
                           alert("Need at least 2 players to start tournament");
                           return;
                         }
-                        // Initialize teams first
-                        const teams = onlineRoom.players.map(p => ({
-                          id: p.side,
-                          name: `Team ${p.side}`,
-                          players: []
-                        }));
+                        // Initialize teams first with IPL team info
+                        const teams = onlineRoom.players.map(p => {
+                          const iplTeam = IPL_TEAMS.find(t => t.id === p.iplTeam);
+                          return {
+                            id: p.side,
+                            name: iplTeam ? iplTeam.name : `Team ${p.side}`,
+                            iplTeamId: p.iplTeam,
+                            players: [],
+                            played: 0,
+                            won: 0,
+                            pts: 0,
+                            nrr: 0,
+                            runsScored: 0,
+                            oversFaced: 0,
+                            runsConceded: 0,
+                            oversBowled: 0
+                          };
+                        });
                         setTournTeams(teams);
                         
                         const mySide = onlineRoom.players?.find((p) => p.socketId === socket.id)?.side || "A";
@@ -2701,22 +2935,26 @@ const App = () => {
       let canControl = true; // offline: always true
       let isSpectator = false;
     
-    if (isOnline && onlineRoom) {
-      const mySide = onlineRoom.players?.find((p) => p.socketId === socket.id)?.side;
-      const bowlingTeamId = effectiveMatchState.bowlingTeam?.id;
-      const battingTeamId = effectiveMatchState.battingTeam?.id;
-      
-      // Check if player is in one of the playing teams
-      const isPlaying = mySide === battingTeamId || mySide === bowlingTeamId;
-      
-      if (!isPlaying) {
-        // Spectator - no control
-        canControl = false;
-        isSpectator = true;
-      } else {
-        // Playing - can control if my team is bowling
-        canControl = mySide === bowlingTeamId;
-      }
+      if (isOnline && onlineRoom) {
+        const mySide = onlineRoom.players?.find((p) => p.socketId === socket.id)?.side;
+        const bowlingTeamId = effectiveMatchState.bowlingTeam?.id;
+        
+        // Map side ("A" or "B") to team ID
+        const teamASideId = effectiveMatchState.teamA?.id;
+        const teamBSideId = effectiveMatchState.teamB?.id;
+        const mySideTeamId = mySide === "A" ? teamASideId : mySide === "B" ? teamBSideId : null;
+        
+        // Check if player is in one of the playing teams
+        const isPlaying = mySideTeamId === bowlingTeamId || mySideTeamId === effectiveMatchState.battingTeam?.id;
+        
+        if (!isPlaying) {
+          // Spectator - no control
+          canControl = false;
+          isSpectator = true;
+        } else {
+          // Playing - can control if my team is bowling
+          canControl = mySideTeamId === bowlingTeamId;
+        }
       }
 
       return (

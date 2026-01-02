@@ -129,6 +129,8 @@ export default function useMatchEngine() {
         setMatchState({
             mode, // 'quick' or 'tourn'
             fixtureId,
+            teamA, // Store team A reference
+            teamB, // Store team B reference
             innings: 1,
             battingTeam: batFirst,
             bowlingTeam: bowlFirst,

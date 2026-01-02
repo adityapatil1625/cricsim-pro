@@ -30,7 +30,7 @@ const Draft = ({
         ];
 
     return (
-        <div className="h-screen w-screen flex flex-col bg-slate-950 relative overflow-hidden">
+        <div className="fixed inset-0 flex flex-col bg-slate-950 overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,_var(--tw-gradient-stops))] from-blue-900/10 via-slate-950 to-slate-950 pointer-events-none"></div>
 
             <div className="relative z-10 w-full px-8 py-6 flex justify-between items-end border-b border-white/5 bg-slate-950/80 backdrop-blur-sm flex-shrink-0">
@@ -79,14 +79,16 @@ const Draft = ({
             </div>
 
             <div className="relative z-10 flex-1 flex p-6 gap-6 min-h-0 overflow-hidden">
-                <PlayerSearch
-                    playerDatabase={playerDatabase}
-                    searchQuery={searchQuery}
-                    setSearchQuery={setSearchQuery}
-                    onAdd={onAddToTeam}
-                    fileInputRef={fileInputRef}
-                    onJsonImport={onJsonImport}
-                />
+                <div className="flex-1 h-full min-h-0">
+                    <PlayerSearch
+                        playerDatabase={playerDatabase}
+                        searchQuery={searchQuery}
+                        setSearchQuery={setSearchQuery}
+                        onAdd={onAddToTeam}
+                        fileInputRef={fileInputRef}
+                        onJsonImport={onJsonImport}
+                    />
+                </div>
 
                 <div className="w-96 flex flex-col gap-4 h-full min-h-0">
                     <div className="glass-panel p-4 rounded-2xl flex-shrink-0 bg-slate-900/80">

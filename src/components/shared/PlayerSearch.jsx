@@ -318,8 +318,8 @@ const PlayerSearch = ({ activeTeam, onAddPlayer }) => {
     };
 
     return (
-        <div className="flex-1 glass-panel rounded-3xl p-1 flex flex-col overflow-hidden h-full">
-            <div className="bg-slate-950/40 h-full rounded-[20px] flex flex-col">
+        <div className="h-full flex flex-col glass-panel rounded-3xl p-1 overflow-hidden">
+            <div className="flex flex-col h-full bg-slate-950/40 rounded-[20px] overflow-hidden">
                 {/* Header */}
                 <div className="p-6 border-b border-white/5 flex justify-between items-center flex-shrink-0">
                     <div>
@@ -380,22 +380,24 @@ const PlayerSearch = ({ activeTeam, onAddPlayer }) => {
                     </div>
                 </div>
 
-                {/* Player list */}
-                <div className="p-6 grid grid-cols-1 xl:grid-cols-2 gap-4 overflow-y-auto custom-scrollbar flex-1 min-h-0">
-                    {resultsToShow.length === 0 ? (
-                        <div className="col-span-full text-slate-500 text-sm italic">
-                            No players match the search. Try a different name
-                            or import more data.
-                        </div>
-                    ) : (
-                        resultsToShow.map((p) => (
-                            <PlayerCard
-                                key={p.id}
-                                player={p}
-                                onAdd={handleAddClick}
-                            />
-                        ))
-                    )}
+                {/* Player list - this scrolls */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+                    <div className="p-6 grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        {resultsToShow.length === 0 ? (
+                            <div className="col-span-full text-slate-500 text-sm italic">
+                                No players match the search. Try a different name
+                                or import more data.
+                            </div>
+                        ) : (
+                            resultsToShow.map((p) => (
+                                <PlayerCard
+                                    key={p.id}
+                                    player={p}
+                                    onAdd={handleAddClick}
+                                />
+                            ))
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

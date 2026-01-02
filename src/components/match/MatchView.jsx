@@ -25,6 +25,19 @@ const MatchView = ({
                        getTeamDisplay = (team) => ({ name: team?.name || "Unknown", logo: null, shortName: team?.name || "Unknown" }),
                        onlineRoom = null
                    }) => {
+    // Watch matchState and broadcast to socket when it changes
+    React.useEffect(() => {
+        if (!onlineRoom?.code) return;
+        const socket = window.__socket;
+        if (!socket) return;
+
+        // Emit matchState update to broadcast
+        socket.emit("updateMatchState", {
+            roomCode: onlineRoom.code,
+            matchState,
+        });
+    }, [matchState?.ballsBowled, matchState?.innings, onlineRoom?.code]);
+    
     const batTeam = matchState.battingTeam;
     const bowlTeam = matchState.bowlingTeam;
     
@@ -500,7 +513,7 @@ const MatchView = ({
                 <h3 className="font-broadcast text-2xl text-white mb-2 border-b border-white/10 pb-1">
                     Full Match Commentary
                 </h3>
-                <div className="overflow-y-auto custom-scrollbar flex-1 space-y-2 p-2">
+                <div className="overflow-y-auto custom-scrollbar space-y-2 p-2 h-[400px]">
                     {[...matchState.commentary].reverse().map((line, i) => (
                         <div
                             key={`${line}-${i}`}
@@ -598,7 +611,7 @@ const MatchView = ({
                 {renderTabContent()}
 
                 {/* Sidebar */}
-                <div className="w-96 flex flex-col gap-4 h-full min-h-0">
+                <div className="w-96 flex flex-col gap-4 h-full overflow-y-auto custom-scrollbar">
                     <div className="flex-shrink-0 glass-panel p-4 rounded-xl">
                         <div className="text-xs text-slate-500 uppercase font-bold mb-3 tracking-widest">
                             Recent Deliveries (Last 2 Overs)
@@ -630,19 +643,19 @@ const MatchView = ({
                         </div>
                     </div>
 
-                    <div className="flex-1 glass-panel rounded-xl p-0 overflow-hidden flex flex-col min-h-0">
+                    <div className="flex-shrink-0 glass-panel rounded-xl p-0 overflow-hidden flex flex-col h-[400px]">
                         <div className="flex-shrink-0 p-3 bg-slate-800/80 border-b border-slate-700 text-xs font-bold uppercase tracking-widest text-slate-400">
                             Live Feed
                         </div>
-                        <div className="flex-1 overflow-y-auto p-4 space-y-3 font-sans text-sm text-slate-300 custom-scrollbar scroll-smooth">
-                            {matchState.commentary.slice(-20).map((line, i) => (
+                        <div className="overflow-y-auto p-3 space-y-2 font-sans text-sm text-slate-300 custom-scrollbar scroll-smooth flex-1 min-h-0">
+                            {matchState.commentary.map((line, i) => (
                                 <div
                                     key={`${line}-${i}`}
-                                    className={`border-b border-slate-800/50 pb-2 last:border-0 ${
+                                    className={`border-b border-slate-800/50 pb-2 last:border-0 text-xs ${
                                         line.includes('OUT')
                                             ? 'text-red-400 font-bold'
                                             : line.includes('SIX') || line.includes('FOUR')
-                                                ? 'text-brand-gold'
+                                                ? 'text-brand-gold font-semibold'
                                                 : ''
                                     }`}
                                 >
