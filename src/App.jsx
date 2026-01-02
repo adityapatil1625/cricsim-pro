@@ -421,7 +421,7 @@ const App = () => {
       // Update ref so we don't re-broadcast this state
       lastBroadcastedBallsRef.current = receivedState.ballsBowled;
       syncMatchState(receivedState);
-      setMatchTab("live");
+      // Don't force tab switch - let user stay on their current view (scorecard, commentary, etc)
       setView("match"); // Guests navigate here when they receive first state
     }
 
@@ -431,7 +431,7 @@ const App = () => {
       // Update the ref so we don't re-broadcast this state
       lastBroadcastedBallsRef.current = data.matchState.ballsBowled;
       syncMatchState(data.matchState);
-      setMatchTab("live");
+      // Don't force tab switch - let user stay on their current view
       setView("match");
     }
 
@@ -440,7 +440,7 @@ const App = () => {
       console.log(`⏭️ Guest received overSkipped event - Balls: ${data.matchState.ballsBowled}`);
       lastBroadcastedBallsRef.current = data.matchState.ballsBowled;
       syncMatchState(data.matchState);
-      setMatchTab("live");
+      // Don't force tab switch - let user stay on their current view
       setView("match");
     }
 
