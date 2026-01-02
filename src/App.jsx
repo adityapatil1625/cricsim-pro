@@ -1253,6 +1253,9 @@ const App = () => {
 
         <div className="relative z-10 w-full max-w-7xl p-8 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           <div className="lg:col-span-5 text-center lg:text-left space-y-6">
+            <div className="flex justify-center lg:justify-start mb-4">
+              <img src="/cricsim_logo.png" alt="CricSim Pro Logo" className="h-40 w-40 object-contain" />
+            </div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-xs font-bold tracking-widest uppercase mb-2">
               <span className="w-2 h-2 rounded-full bg-brand-gold animate-pulse" />
               Elite Edition
@@ -2494,7 +2497,13 @@ const App = () => {
     const players = isOnline ? onlineRoom?.players || [] : auctionTeams;
     
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 relative overflow-hidden">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 relative overflow-hidden p-4">
+        <button
+          onClick={() => setView("menu")}
+          className="absolute top-6 left-6 px-4 py-2 rounded-full border border-slate-700 text-slate-400 hover:text-white hover:border-white hover:bg-white/5 transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-2"
+        >
+          <ChevronLeft size={16} /> Back to Menu
+        </button>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/20 via-slate-950 to-slate-950" />
         
         <div className="relative z-10 glass-panel rounded-3xl p-8 w-full max-w-4xl bg-slate-950/80">
@@ -2627,7 +2636,13 @@ const App = () => {
 
   const renderOnlineEntry = () => {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4 relative">
+          <button
+            onClick={() => setView("menu")}
+            className="absolute top-6 left-6 px-4 py-2 rounded-full border border-slate-700 text-slate-400 hover:text-white hover:border-white hover:bg-white/5 transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-2"
+          >
+            <ChevronLeft size={16} /> Back to Menu
+          </button>
           <div className="glass-panel rounded-3xl p-8 w-full max-w-md bg-slate-950/80">
             <h2 className="font-broadcast text-4xl text-white mb-2">
               Play with Friends
@@ -2736,13 +2751,13 @@ const App = () => {
     if (!onlineRoom) {
       return (
           <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-300">
-            <div>
-              <p>No room data. Go back and create or join a room.</p>
+            <div className="text-center">
+              <p className="mb-4">No room data. Go back and create or join a room.</p>
               <button
-                  onClick={() => setView("online_entry")}
-                  className="mt-4 text-sm text-slate-400 underline"
+                  onClick={() => setView("menu")}
+                  className="px-6 py-3 rounded-full border border-slate-700 text-slate-400 hover:text-white hover:border-white hover:bg-white/5 transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-2 mx-auto"
               >
-                Back
+                <ChevronLeft size={16} /> Back to Menu
               </button>
             </div>
           </div>
@@ -2752,8 +2767,14 @@ const App = () => {
     console.log("🔍 Online Room Mode:", onlineRoom.mode); // Debug
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-950">
-          <div className="glass-panel rounded-3xl p-8 w-full max-w-4xl bg-slate-950/80">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4 relative">
+          <button
+            onClick={() => setView("menu")}
+            className="absolute top-6 left-6 px-4 py-2 rounded-full border border-slate-700 text-slate-400 hover:text-white hover:border-white hover:bg-white/5 transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-2"
+          >
+            <ChevronLeft size={16} /> Back
+          </button>
+          <div className="glass-panel rounded-3xl p-8 w-full max-w-4xl bg-slate-950/80 mt-12">
             <h2 className="font-broadcast text-4xl text-white mb-2">
               Room {onlineRoom.code}
             </h2>

@@ -10,6 +10,9 @@ const Menu = ({ onQuickPlay, onTournament }) => {
 
             <div className="relative z-10 w-full max-w-7xl p-8 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
                 <div className="lg:col-span-5 text-center lg:text-left space-y-6">
+                    <div className="flex justify-center lg:justify-start mb-4">
+                        <div className="h-32 w-32 bg-brand-gold rounded-lg flex items-center justify-center text-black font-bold text-2xl">LOGO</div>
+                    </div>
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-xs font-bold tracking-widest uppercase mb-2">
                         <span className="w-2 h-2 rounded-full bg-brand-gold animate-pulse"></span>
                         Elite Edition v2.0
