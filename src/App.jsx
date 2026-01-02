@@ -494,10 +494,23 @@ const App = () => {
   // Ref to track the last broadcasted match state to prevent sync loops
   const lastBroadcastedBallsRef = React.useRef(-1);
 
+  // Reset ref when innings changes to ensure new innings broadcasts first state
+  useEffect(() => {
+    if (!isOnline || !matchState) return;
+    lastBroadcastedBallsRef.current = -1;
+    console.log(`🔄 Reset broadcast ref for innings ${matchState.innings}`);
+  }, [matchState?.innings, isOnline]);
+
   // ---------- BROADCAST matchState ON CHANGE (whoever is bowling) ----------
   useEffect(() => {
-    if (!isOnline || view !== "match") return;
-    if (!matchState || !onlineRoom?.code) return;
+    if (!isOnline || view !== "match") {
+      console.log(`⏭️ Broadcast skipped: isOnline=${isOnline}, view=${view}`);
+      return;
+    }
+    if (!matchState || !onlineRoom?.code) {
+      console.log(`⏭️ Broadcast skipped: no matchState or roomCode`);
+      return;
+    }
 
     // Get current player's side and team
     const mySide = onlineRoom.players?.find((p) => p.socketId === socket.id)?.side;
@@ -509,21 +522,27 @@ const App = () => {
     const bowlingTeamId = matchState.bowlingTeam?.id;
     const hasControl = mySideTeamId === bowlingTeamId;
     
-    if (!hasControl) return; // Don't broadcast if I'm not controlling
+    console.log(`🎯 Broadcast check - Side: ${mySide}, MyTeamId: ${mySideTeamId}, Bowling: ${bowlingTeamId}, Control: ${hasControl}, Innings: ${matchState.innings}, Balls: ${matchState.ballsBowled}`);
+    
+    if (!hasControl) {
+      console.log(`👀 My team not bowling (${mySideTeamId} vs bowling ${bowlingTeamId}), waiting for opponent`);
+      return; // Don't broadcast if I'm not controlling
+    }
 
     // Only broadcast if ballsBowled has actually changed from last broadcast
     if (lastBroadcastedBallsRef.current === matchState.ballsBowled && !matchState.isMatchOver) {
+      console.log(`⏭️ Skipping - same balls (${matchState.ballsBowled})`);
       return; // No change in balls, don't broadcast
     }
 
-    console.log(`📢 ${isOnlineHost ? "Host" : "Guest"} broadcasting matchState update - Balls: ${matchState.ballsBowled}`);
+    console.log(`📢 ${isOnlineHost ? "Host" : "Guest"} BROADCASTING - Balls: ${matchState.ballsBowled}, Innings: ${matchState.innings}, MyTeam: ${mySideTeamId}, Bowling: ${bowlingTeamId}`);
     lastBroadcastedBallsRef.current = matchState.ballsBowled;
     
     socket.emit("updateMatchState", {
       roomCode: onlineRoom.code,
       matchState,
     });
-  }, [matchState?.ballsBowled, matchState?.isMatchOver, matchState?.bowlingTeam?.id, matchState?.innings, isOnline, view, onlineRoom, socket.id]);
+  }, [matchState?.ballsBowled, matchState?.isMatchOver, matchState?.innings, matchState?.battingTeam?.id, matchState?.bowlingTeam?.id, matchState?.teamA?.id, matchState?.teamB?.id, isOnline, view, onlineRoom, socket.id]);
 
   // Reset guest ready flag when leaving online room
   useEffect(() => {

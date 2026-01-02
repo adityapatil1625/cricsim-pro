@@ -45,6 +45,12 @@ const MatchCenter = ({
         }
     }, [matchState.recentBalls]);
 
+    // Wrapper to handle innings break and broadcast to guests
+    const handleInningsBreakWithBroadcast = () => {
+        handleInningsBreak();
+        // Broadcast will happen automatically through the App.jsx effect on innings change
+    };
+
     if (!matchState?.battingTeam || !matchState?.bowlingTeam) {
         return null;
     }
@@ -469,7 +475,7 @@ const MatchCenter = ({
                             </div>
                         </div>
                         <button
-                            onClick={handleInningsBreak}
+                            onClick={handleInningsBreakWithBroadcast}
                             className="mt-12 px-16 py-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-broadcast text-3xl rounded-2xl shadow-2xl transition-all active:scale-95 animate-pulse"
                         >
                             START 2ND INNINGS

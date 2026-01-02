@@ -470,6 +470,9 @@ export default function useMatchEngine() {
                 strikerId: striker.instanceId || striker.id,
                 nonStrikerId: nonStriker.instanceId || nonStriker.id,
                 bowlerId: bowler.instanceId || bowler.id,
+                // Preserve teamA and teamB for control logic
+                teamA: prev.teamA,
+                teamB: prev.teamB,
             };
 
             next.commentary = [

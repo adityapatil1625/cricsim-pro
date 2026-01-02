@@ -556,14 +556,24 @@ io.on("connection", (socket) => {
       // Only update if this is a newer state (more balls bowled or match status changed)
       if (room.matchState) {
         const prevBalls = room.matchState.ballsBowled || 0;
+        const prevInnings = room.matchState.innings || 1;
         const newBalls = matchState?.ballsBowled || 0;
+        const newInnings = matchState?.innings || 1;
         
-        // Reject if we're going backwards or staying the same (duplicate)
-        if (newBalls <= prevBalls && !matchState?.isMatchOver) {
+        // Reject if we're going backwards in the SAME innings or staying the same (duplicate)
+        // But ALLOW transition to a new innings (even if balls go to 0)
+        if (newInnings === prevInnings && newBalls <= prevBalls && !matchState?.isMatchOver) {
           console.log(
-            `⚠️  Ignoring duplicate/outdated state update in ${roomCode} - Prev balls: ${prevBalls}, New balls: ${newBalls}`
+            `⚠️  Ignoring duplicate/outdated state update in ${roomCode} - Innings ${prevInnings}: Prev balls: ${prevBalls}, New balls: ${newBalls}`
           );
           return;
+        }
+        
+        // Allow new innings even if balls reset
+        if (newInnings > prevInnings) {
+          console.log(
+            `✅ Accepting innings transition in ${roomCode} - Innings ${prevInnings} → ${newInnings}`
+          );
         }
       }
 

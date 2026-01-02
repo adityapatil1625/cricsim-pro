@@ -25,19 +25,6 @@ const MatchView = ({
                        getTeamDisplay = (team) => ({ name: team?.name || "Unknown", logo: null, shortName: team?.name || "Unknown" }),
                        onlineRoom = null
                    }) => {
-    // Watch matchState and broadcast to socket when it changes
-    React.useEffect(() => {
-        if (!onlineRoom?.code) return;
-        const socket = window.__socket;
-        if (!socket) return;
-
-        // Emit matchState update to broadcast
-        socket.emit("updateMatchState", {
-            roomCode: onlineRoom.code,
-            matchState,
-        });
-    }, [matchState?.ballsBowled, matchState?.innings, onlineRoom?.code]);
-    
     const batTeam = matchState.battingTeam;
     const bowlTeam = matchState.bowlingTeam;
     
