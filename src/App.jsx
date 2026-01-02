@@ -1,5 +1,6 @@
 // src/App.jsx
 import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import MatchCenter from "./components/match/MatchCenter";
 import PlayerSearch from "./components/shared/PlayerSearch";
 import TeamListItem from "./components/shared/TeamListItem";
@@ -75,6 +76,58 @@ const App = () => {
   const [onlineName, setOnlineName] = useState("");
 
   const [view, setView] = useState("menu"); // menu | quick_setup | tourn_setup | tourn_draft | tourn_hub | online_entry | online_menu | match | auction_lobby | auction
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Map view states to URL paths (memoized to avoid recreation)
+  const viewToPath = React.useMemo(() => ({
+    menu: "/",
+    quick_setup: "/quick-setup",
+    tourn_setup: "/tournament/setup",
+    tourn_draft: "/tournament/draft",
+    tourn_hub: "/tournament/hub",
+    online_entry: "/online",
+    online_menu: "/online/lobby",
+    match: "/match",
+    auction_lobby: "/auction/lobby",
+    auction: "/auction/room",
+  }), []);
+
+  // Create reverse mapping (memoized)
+  const pathToView = React.useMemo(() => {
+    return Object.entries(viewToPath).reduce((acc, [key, value]) => {
+      acc[value] = key;
+      return acc;
+    }, {});
+  }, [viewToPath]);
+
+  // Ref to track current view without creating effect dependencies
+  const viewRef = React.useRef(view);
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
+  // Sync URL when view changes
+  useEffect(() => {
+    const path = viewToPath[view];
+    if (path && location.pathname !== path) {
+      navigate(path, { replace: false });
+    }
+  }, [view, viewToPath, navigate]);
+
+  // Sync view when URL changes (e.g. back button or manual entry)
+  // Only runs when pathname changes, not when view changes
+  useEffect(() => {
+    const currentPath = location.pathname;
+    const newView = pathToView[currentPath];
+    
+    if (newView && newView !== viewRef.current) {
+      setView(newView);
+    } else if (!newView && currentPath === "/" && viewRef.current !== "menu") {
+      setView("menu");
+    }
+  }, [location.pathname, pathToView]);
 
   const [teamA, setTeamA] = useState({
     id: "A",
@@ -364,7 +417,9 @@ const App = () => {
       // Only sync if ballsBowled changed to reduce jitter
       if (matchState && receivedState.ballsBowled === matchState.ballsBowled) return;
       
-      console.log(`📊 Guest received matchStateUpdated event`);
+      console.log(`📊 Guest received matchStateUpdated event - Balls: ${receivedState.ballsBowled}`);
+      // Update ref so we don't re-broadcast this state
+      lastBroadcastedBallsRef.current = receivedState.ballsBowled;
       syncMatchState(receivedState);
       setMatchTab("live");
       setView("match"); // Guests navigate here when they receive first state
@@ -372,7 +427,9 @@ const App = () => {
 
     function handleBallBowled(data) {
       if (!data?.matchState) return;
-      console.log(`🏏 Guest received ballBowled event`);
+      console.log(`🏏 Guest received ballBowled event - Balls: ${data.matchState.ballsBowled}`);
+      // Update the ref so we don't re-broadcast this state
+      lastBroadcastedBallsRef.current = data.matchState.ballsBowled;
       syncMatchState(data.matchState);
       setMatchTab("live");
       setView("match");
@@ -380,7 +437,8 @@ const App = () => {
 
     function handleOverSkipped(data) {
       if (!data?.matchState) return;
-      console.log(`⏭️ Guest received overSkipped event`);
+      console.log(`⏭️ Guest received overSkipped event - Balls: ${data.matchState.ballsBowled}`);
+      lastBroadcastedBallsRef.current = data.matchState.ballsBowled;
       syncMatchState(data.matchState);
       setMatchTab("live");
       setView("match");
@@ -388,7 +446,7 @@ const App = () => {
 
     function handleInningsChanged(data) {
       if (!data?.matchState) return;
-      console.log(`🔄 Guest received inningsChanged event`);
+      console.log(`🔄 Guest received inningsChanged event - Innings: ${data.matchState.innings}`);
       syncMatchState(data.matchState);
       setMatchTab("live");
       setView("match");
@@ -450,12 +508,22 @@ const App = () => {
     
     if (!hasControl) return; // Don't broadcast if I'm not controlling
 
+    // Only broadcast if ballsBowled has actually changed from last broadcast
+    if (lastBroadcastedBallsRef.current === matchState.ballsBowled && !matchState.isMatchOver) {
+      return; // No change in balls, don't broadcast
+    }
+
     console.log(`📢 ${isOnlineHost ? "Host" : "Guest"} broadcasting matchState update - Balls: ${matchState.ballsBowled}`);
+    lastBroadcastedBallsRef.current = matchState.ballsBowled;
+    
     socket.emit("updateMatchState", {
       roomCode: onlineRoom.code,
       matchState,
     });
   }, [matchState?.ballsBowled, matchState?.isMatchOver, matchState?.bowlingTeam?.id, matchState?.innings, isOnline, view, onlineRoom, socket.id]);
+
+  // Ref to track the last broadcasted match state to prevent sync loops
+  const lastBroadcastedBallsRef = React.useRef(-1);
 
   // Reset guest ready flag when leaving online room
   useEffect(() => {

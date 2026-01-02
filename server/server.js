@@ -553,7 +553,21 @@ io.on("connection", (socket) => {
       const { roomCode, matchState } = data;
       const room = getOrCreateRoom(roomCode);
 
-      // Any player in the room can update match state
+      // Only update if this is a newer state (more balls bowled or match status changed)
+      if (room.matchState) {
+        const prevBalls = room.matchState.ballsBowled || 0;
+        const newBalls = matchState?.ballsBowled || 0;
+        
+        // Reject if we're going backwards or staying the same (duplicate)
+        if (newBalls <= prevBalls && !matchState?.isMatchOver) {
+          console.log(
+            `⚠️  Ignoring duplicate/outdated state update in ${roomCode} - Prev balls: ${prevBalls}, New balls: ${newBalls}`
+          );
+          return;
+        }
+      }
+
+      // Any player in room can update match state
       room.matchState = matchState;
 
       // Broadcast update to all players in room
@@ -563,7 +577,7 @@ io.on("connection", (socket) => {
       });
 
       console.log(
-        `📊 Match state updated in ${roomCode} - Score: ${matchState.score}/${matchState.wickets}`
+        `📊 Match state updated in ${roomCode} - Score: ${matchState.score}/${matchState.wickets}, Balls: ${matchState.ballsBowled}`
       );
     } catch (error) {
       console.error("❌ Error in updateMatchState:", error);
@@ -576,12 +590,33 @@ io.on("connection", (socket) => {
       const { roomCode, matchState, commentary } = data;
       const room = getOrCreateRoom(roomCode);
 
+      // Validate this is a new ball (not a duplicate)
+      if (room.matchState) {
+        const prevBalls = room.matchState.ballsBowled || 0;
+        const newBalls = matchState?.ballsBowled || 0;
+        
+        // If balls count hasn't increased, this is likely a duplicate/stale update
+        if (newBalls <= prevBalls && !matchState?.isMatchOver) {
+          console.log(
+            `⚠️  Rejecting stale bowlBall in ${roomCode} - Prev: ${prevBalls}, New: ${newBalls}`
+          );
+          return;
+        }
+      }
+
+      // Update room state
+      room.matchState = matchState;
+
       // Any player in room can bowl
       io.to(roomCode).emit("ballBowled", {
         matchState,
         commentary,
         timestamp: Date.now(),
       });
+      
+      console.log(
+        `⚾ Ball bowled in ${roomCode} - Total balls: ${matchState.ballsBowled}, Score: ${matchState.score}/${matchState.wickets}`
+      );
     } catch (error) {
       console.error("❌ Error in bowlBall:", error);
     }
@@ -593,11 +628,31 @@ io.on("connection", (socket) => {
       const { roomCode, matchState } = data;
       const room = getOrCreateRoom(roomCode);
 
+      // Validate this is a new state
+      if (room.matchState) {
+        const prevBalls = room.matchState.ballsBowled || 0;
+        const newBalls = matchState?.ballsBowled || 0;
+        
+        if (newBalls <= prevBalls && !matchState?.isMatchOver) {
+          console.log(
+            `⚠️  Rejecting stale skipOver in ${roomCode} - Prev: ${prevBalls}, New: ${newBalls}`
+          );
+          return;
+        }
+      }
+
+      // Update room state
+      room.matchState = matchState;
+
       // Any player in room can skip over
       io.to(roomCode).emit("overSkipped", {
         matchState,
         timestamp: Date.now(),
       });
+      
+      console.log(
+        `⏭️  Over skipped in ${roomCode} - Total balls: ${matchState.ballsBowled}`
+      );
     } catch (error) {
       console.error("❌ Error in skipOver:", error);
     }
@@ -609,11 +664,18 @@ io.on("connection", (socket) => {
       const { roomCode, matchState } = data;
       const room = getOrCreateRoom(roomCode);
 
+      // Update room state
+      room.matchState = matchState;
+
       // Any player can trigger innings break
       io.to(roomCode).emit("inningsChanged", {
         matchState,
         timestamp: Date.now(),
       });
+      
+      console.log(
+        `🔄 Innings changed in ${roomCode} - Now Innings: ${matchState.innings}`
+      );
     } catch (error) {
       console.error("❌ Error in inningsBreak:", error);
     }
