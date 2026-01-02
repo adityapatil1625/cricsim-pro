@@ -489,7 +489,10 @@ const App = () => {
       socket.off("matchStateUpdate", handleMatchStateUpdate);
       socket.off("endOnlineMatch", handleEndOnlineMatch);
     };
-  }, [resetMatch, syncMatchState]);
+  }, []);
+
+  // Ref to track the last broadcasted match state to prevent sync loops
+  const lastBroadcastedBallsRef = React.useRef(-1);
 
   // ---------- BROADCAST matchState ON CHANGE (whoever is bowling) ----------
   useEffect(() => {
@@ -521,9 +524,6 @@ const App = () => {
       matchState,
     });
   }, [matchState?.ballsBowled, matchState?.isMatchOver, matchState?.bowlingTeam?.id, matchState?.innings, isOnline, view, onlineRoom, socket.id]);
-
-  // Ref to track the last broadcasted match state to prevent sync loops
-  const lastBroadcastedBallsRef = React.useRef(-1);
 
   // Reset guest ready flag when leaving online room
   useEffect(() => {
