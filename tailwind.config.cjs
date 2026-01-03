@@ -10,8 +10,18 @@ module.exports = {
       fontFamily: {
         broadcast: ['Teko', 'system-ui', 'sans-serif'],
         sans: ['Outfit', 'system-ui', 'sans-serif']
+      },
+      keyframes: {
+        spin: {
+          from: { transform: 'rotate(0deg)' },
+          to: { transform: 'rotate(360deg)' },
+        }
+      },
+      animation: {
+        spin: 'spin 3s linear infinite',
       }
     }
   },
   plugins: []
 };
+

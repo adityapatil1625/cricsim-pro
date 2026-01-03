@@ -32,15 +32,27 @@ const getCommentaryText = (outcome, batsman, bowler, ballsBowled) => {
 };
 
 // simple outcome using player averages (can be improved)
-const simulateBallOutcome = (batsman, bowler) => {
+const simulateBallOutcome = (batsman, bowler, matchState = null) => {
     const batAvg = batsman?.avg || 30;
     const batSr = batsman?.sr || 130;
     const bowlAvg = bowler?.bowlAvg || 25;
     const bowlEcon = bowler?.bowlEcon || 8;
+    
+    // Determine if batsman is a power hitter (high SR)
+    const isPowerHitter = batSr > 140;
+    const isRegularBatsman = batAvg > 35 && batSr < 130;
 
     const batFactor = batAvg / 35 + batSr / 130;
     const bowlFactor = 30 / bowlAvg + 9 / bowlEcon;
     const difficulty = bowlFactor / batFactor;
+
+    // Get match phase from state
+    let ballsInInnings = 0;
+    let oversPlayed = 0;
+    if (matchState) {
+      ballsInInnings = matchState.ballsBowled || 0;
+      oversPlayed = Math.floor(ballsInInnings / 6);
+    }
 
     let probs = {
         0: 30,
@@ -52,6 +64,50 @@ const simulateBallOutcome = (batsman, bowler) => {
         W: 4,
         Ex: 3,
     };
+
+    // POWERPLAY PHASE (0-6 overs): Conservative batting
+    if (oversPlayed < 6) {
+      probs[0] += 8;      // More dots
+      probs[1] -= 3;      // Fewer singles
+      probs[4] -= 3;      // Fewer fours
+      probs[6] -= 2;      // Fewer sixes
+      
+      if (isPowerHitter) {
+        probs[4] += 5;    // Power hitters attack even in powerplay
+        probs[6] += 2;
+        probs[0] -= 5;
+      }
+    }
+    // MIDDLE OVERS (7-15): Accumulation
+    else if (oversPlayed >= 6 && oversPlayed < 16) {
+      probs[1] += 2;
+      probs[2] += 2;
+      probs[4] += 2;
+      
+      if (isPowerHitter) {
+        probs[4] += 3;
+        probs[6] += 2;
+        probs[0] -= 4;
+      }
+    }
+    // DEATH OVERS (16-20): Aggressive batting
+    else if (oversPlayed >= 16) {
+      probs[4] += 8;      // More fours
+      probs[6] += 6;      // More sixes
+      probs[0] -= 8;      // Fewer dots
+      probs[1] -= 3;
+      probs[2] -= 2;
+      
+      if (isPowerHitter) {
+        probs[6] += 5;    // Power hitters go for sixes
+        probs[4] += 3;
+        probs[0] -= 8;
+        probs["W"] += 2;  // Higher risk
+      } else if (isRegularBatsman) {
+        probs["W"] += 3;  // Regular batsmen struggle in death
+        probs[0] += 4;
+      }
+    }
 
     if (difficulty > 1.1) {
         probs[0] += 10;
@@ -107,7 +163,7 @@ export default function useMatchEngine() {
         return { batsmanStats, bowlerStats };
     };
 
-    const startMatchInternal = (mode, teamA, teamB, fixtureId = null) => {
+    const startMatchInternal = (mode, teamA, teamB, fixtureId = null, playerName = null) => {
         if (!teamA || !teamB || !teamA.players?.length || !teamB.players?.length) {
             console.error("startMatchInternal: invalid teams");
             return;
@@ -129,6 +185,7 @@ export default function useMatchEngine() {
         setMatchState({
             mode, // 'quick' or 'tourn'
             fixtureId,
+            playerName: playerName || null, // Store player's entered name
             teamA, // Store team A reference
             teamB, // Store team B reference
             innings: 1,
@@ -151,6 +208,7 @@ export default function useMatchEngine() {
             bowlerId: bowler.instanceId || bowler.id,
             isMatchOver: false,
             winner: null,
+            impactPlayer: null,
             eventOverlay: null,
             innings1: null, // Will store { teamId, score, overs }
             innings2: null, // Will store { teamId, score, overs }
@@ -158,16 +216,61 @@ export default function useMatchEngine() {
     };
 
     // PUBLIC: quick match between teamA & teamB
-    const startQuickMatch = (teamA, teamB) => {
-        startMatchInternal("quick", teamA, teamB, null);
+    const startQuickMatch = (teamA, teamB, playerName = null) => {
+        startMatchInternal("quick", teamA, teamB, null, playerName);
     };
 
     // PUBLIC: tournament match
-    const startTournamentMatch = (fixtureId, teamA, teamB) => {
-        startMatchInternal("tourn", teamA, teamB, fixtureId);
+    const startTournamentMatch = (fixtureId, teamA, teamB, playerName = null) => {
+        startMatchInternal("tourn", teamA, teamB, fixtureId, playerName);
     };
 
     // ---------- CORE BALL SIM ----------
+
+    // Calculate impact player based on batting and bowling performance
+    const getImpactPlayer = (state) => {
+        if (!state.batsmanStats || !state.bowlerStats) return null;
+
+        let bestPlayer = null;
+        let bestScore = -Infinity;
+
+        // Check batsmen - impact based on runs and strike rate
+        Object.entries(state.batsmanStats).forEach(([playerId, stats]) => {
+            if (stats.balls > 0) {
+                const strikeRate = (stats.runs / stats.balls) * 100;
+                const impactScore = stats.runs + (strikeRate / 50); // Weight runs heavily
+                if (impactScore > bestScore) {
+                    bestScore = impactScore;
+                    bestPlayer = { id: playerId, name: null, type: 'batsman', stats };
+                }
+            }
+        });
+
+        // Check bowlers - impact based on wickets and economy
+        Object.entries(state.bowlerStats).forEach(([playerId, stats]) => {
+            if (stats.balls > 0) {
+                const overs = stats.balls / 6;
+                const economy = stats.runs / overs;
+                const impactScore = (stats.wickets * 50) - (economy * 5); // Wickets heavily weighted
+                if (impactScore > bestScore) {
+                    bestScore = impactScore;
+                    bestPlayer = { id: playerId, name: null, type: 'bowler', stats };
+                }
+            }
+        });
+
+        // Get player name from teams
+        if (bestPlayer) {
+            const player = [...state.battingTeam.players, ...state.bowlingTeam.players].find(
+                p => (p.instanceId || p.id) === bestPlayer.id
+            );
+            if (player) {
+                bestPlayer.name = player.name;
+            }
+        }
+
+        return bestPlayer;
+    };
 
     const simulateOneBall = (prevState, showOverlay = true) => {
         if (!prevState || prevState.isMatchOver) return prevState;
@@ -188,7 +291,7 @@ export default function useMatchEngine() {
 
         if (!striker || !bowler) return state;
 
-        const outcome = simulateBallOutcome(striker, bowler);
+        const outcome = simulateBallOutcome(striker, bowler, state);
         let runs = 0;
         let isWicket = false;
         let extra = 0;
@@ -307,10 +410,28 @@ export default function useMatchEngine() {
             state.nonStrikerId = tmp;
 
             // rotate bowler among last 5 players of bowling team
+            // Max 4 overs per bowler rule
             const bowlers = state.bowlingTeam.players.slice(-5);
             const currentBowler = state.bowlerId;
-            const nextBowler =
-                bowlers.find((b) => (b.instanceId || b.id) !== currentBowler) || bowlers[0];
+            const currentBowlerOvers = Math.floor((state.bowlerStats[currentBowler]?.balls || 0) / 6);
+            
+            // Find a bowler who hasn't bowled 4 overs yet (excluding current bowler if they've bowled 4)
+            let nextBowler = null;
+            for (const bowler of bowlers) {
+                const bowlerId = bowler.instanceId || bowler.id;
+                const oversForBowler = Math.floor((state.bowlerStats[bowlerId]?.balls || 0) / 6);
+                // Don't allow bowler to continue if they've reached 4 overs
+                if (oversForBowler < 4) {
+                    nextBowler = bowler;
+                    break;
+                }
+            }
+            
+            // If no bowler with <4 overs found, find anyone different from current
+            if (!nextBowler) {
+                nextBowler = bowlers.find((b) => (b.instanceId || b.id) !== currentBowler) || bowlers[0];
+            }
+            
             state.bowlerId = nextBowler.instanceId || nextBowler.id;
 
             state.thisOver = [];
@@ -329,6 +450,7 @@ export default function useMatchEngine() {
             if (state.score > state.target) {
                 state.isMatchOver = true;
                 state.winner = state.battingTeam;
+                state.impactPlayer = getImpactPlayer(state);
                 state.innings2 = {
                     teamId: state.battingTeam.id,
                     score: state.score,
@@ -346,6 +468,7 @@ export default function useMatchEngine() {
             ) {
                 state.isMatchOver = true;
                 state.winner = state.bowlingTeam;
+                state.impactPlayer = getImpactPlayer(state);
                 state.innings2 = {
                     teamId: state.battingTeam.id,
                     score: state.score,
@@ -437,8 +560,12 @@ export default function useMatchEngine() {
     };
 
     const handleInningsBreak = () => {
+        console.log("📋 handleInningsBreak called");
         setMatchState((prev) => {
-            if (!prev) return prev;
+            if (!prev) {
+                console.log("⚠️ No previous match state");
+                return prev;
+            }
 
             const firstInningsScore = prev.score;
             const firstInningsOvers = prev.ballsBowled / 6;
@@ -480,6 +607,7 @@ export default function useMatchEngine() {
                 `Innings break. Target is ${firstInningsScore + 1}.`,
             ];
 
+            console.log("✅ Innings switched to 2, new batting team:", next.battingTeam.name, "Target:", next.target + 1);
             return next;
         });
     };

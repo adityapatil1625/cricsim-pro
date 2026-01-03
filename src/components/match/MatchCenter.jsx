@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import StatsDashboard from "./StatsDashboard";
 import stadiumImg from "../../pictures/stadium.jpg";
 import {
@@ -28,25 +29,64 @@ const MatchCenter = ({
                          getTeamDisplay,
                          onlineRoom = null,
                          tournPhase = null,
+                         setView = null,
                      }) => {
     const commentaryEndRef = useRef(null);
     const recentBallsRef = useRef(null);
     const isBowlingRef = useRef(false);
+    const location = useLocation();
+    const navigate = useNavigate();
+    const lastUrlRef = useRef(null);
+
+    // Sync activeTab with URL query parameter - only when URL changes
+    useEffect(() => {
+        const searchParams = new URLSearchParams(location.search);
+        const tabParam = searchParams.get("tab");
+        
+        if (tabParam && tabParam !== activeTab) {
+            setActiveTab(tabParam);
+        }
+    }, [location.search]);
+
+    // Update URL when activeTab changes - prevent circular updates
+    useEffect(() => {
+        const searchParams = new URLSearchParams(location.search);
+        searchParams.set("tab", activeTab || "live");
+        const newUrl = `${location.pathname}?${searchParams.toString()}`;
+        
+        if (lastUrlRef.current !== newUrl) {
+            lastUrlRef.current = newUrl;
+            navigate(newUrl, { replace: true });
+        }
+    }, [activeTab, location.pathname]);
+
+    // Sync match over state with URL
+    useEffect(() => {
+        if (matchState.isMatchOver && setView) {
+            setView("match_over");
+        }
+    }, [matchState.isMatchOver, setView]);
+
+    // Guard against null matchState
+    if (!matchState) {
+        return <div className="min-h-screen bg-slate-950 flex items-center justify-center">Loading match...</div>;
+    }
 
     useEffect(() => {
         if (commentaryEndRef.current) {
             commentaryEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
-    }, [matchState.commentary]);
+    }, [matchState?.commentary]);
 
     useEffect(() => {
         if (recentBallsRef.current) {
             recentBallsRef.current.scrollLeft = recentBallsRef.current.scrollWidth;
         }
-    }, [matchState.recentBalls]);
+    }, [matchState?.recentBalls]);
 
     // Wrapper to handle innings break and broadcast to guests
     const handleInningsBreakWithBroadcast = () => {
+        console.log("🏏 Start 2nd Innings clicked - current innings:", matchState.innings);
         handleInningsBreak();
         // Broadcast will happen automatically through the App.jsx effect on innings change
     };
@@ -270,7 +310,9 @@ const MatchCenter = ({
                             </tr>
                             </thead>
                             <tbody className="text-slate-300">
-                            {batTeam.players.map((p) => {
+                            {batTeam.players
+                                .filter(p => matchState.batsmanStats[p.instanceId]?.balls > 0)
+                                .map((p) => {
                                 const stats = matchState.batsmanStats[p.instanceId] || {
                                     runs: 0,
                                     balls: 0,
@@ -323,6 +365,22 @@ const MatchCenter = ({
                             })}
                             </tbody>
                         </table>
+
+                        {/* Batters Yet to Bat */}
+                        <div className="mt-8 mb-8">
+                            <h3 className="font-broadcast text-2xl text-white mb-4 border-b border-white/10 pb-2">
+                                Yet to Bat
+                            </h3>
+                            <div className="flex flex-wrap gap-2">
+                                {batTeam.players
+                                    .filter(p => !matchState.batsmanStats[p.instanceId] || matchState.batsmanStats[p.instanceId].balls === 0)
+                                    .map(p => (
+                                        <div key={p.instanceId} className="px-3 py-1 rounded-full bg-slate-700/50 border border-slate-600 text-sm text-slate-300">
+                                            {p.name}
+                                        </div>
+                                    ))}
+                            </div>
+                        </div>
 
                         {/* Bowling */}
                         <h3 className="font-broadcast text-2xl text-white mb-4 border-b border-white/10 pb-2 mt-8">
@@ -475,7 +533,12 @@ const MatchCenter = ({
                             </div>
                         </div>
                         <button
-                            onClick={handleInningsBreakWithBroadcast}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                console.log("🏏 Start 2nd Innings clicked");
+                                handleInningsBreakWithBroadcast();
+                            }}
                             className="mt-12 px-16 py-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-broadcast text-3xl rounded-2xl shadow-2xl transition-all active:scale-95 animate-pulse"
                         >
                             START 2ND INNINGS
@@ -484,68 +547,247 @@ const MatchCenter = ({
                 </div>
             )}
 
-            {/* ✅ MATCH RESULT OVERLAY */}
+            {/* ✅ MATCH RESULT OVERLAY - ELEGANT */}
             {matchState.isMatchOver && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-brand-gold/10 via-transparent to-transparent" />
-                    <div className="relative text-center space-y-8 animate-fade-in p-8">
-                        <div className="text-brand-gold text-9xl font-broadcast drop-shadow-2xl animate-bounce">
-                            {matchState.winner === "Tie" ? "MATCH TIED!" : "MATCH OVER!"}
-                        </div>
-                        
-                        {matchState.winner !== "Tie" && (
-                            <>
-                                {tournPhase === "final" && (
-                                    <img 
-                                        src="https://documents.iplt20.com/ipl/IPLMedia/media/IPLImages/trophy.png" 
-                                        alt="IPL Trophy" 
-                                        className="w-48 h-48 object-contain mx-auto animate-pulse"
-                                    />
-                                )}
-                                <div className="flex flex-col items-center gap-4">
-                                    {getTeamDisplay && getTeamDisplay(matchState.winner).logo && (
-                                        <img src={getTeamDisplay(matchState.winner).logo} alt={getTeamDisplay(matchState.winner).shortName} className="w-24 h-24 object-contain" />
-                                    )}
-                                    <div className="text-white text-6xl font-broadcast">
-                                        {tournPhase === "final" ? "🏆 CHAMPIONS 🏆" : `🏆 ${getTeamDisplay ? getTeamDisplay(matchState.winner).name : matchState.winner.name}`}
+                <div className="absolute inset-0 z-50 flex items-center justify-center overflow-auto bg-slate-950/95 backdrop-blur-sm">
+                    {/* Subtle background gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-950 opacity-50" />
+                    
+                    {/* Main content with proper scrolling */}
+                    <div className="relative w-full h-full flex flex-col overflow-hidden">
+                        {/* Top three-column content */}
+                        <div className="flex-1 w-full flex items-stretch overflow-y-auto">
+                            {/* LEFT PANEL - Innings 1 Stats */}
+                            <div className="flex-1 flex flex-col items-center justify-center px-8 py-8 border-r border-slate-700/50">
+                                <div className="space-y-6">
+                                    <div className="text-center">
+                                        <div className="text-slate-500 text-xs uppercase tracking-widest font-bold mb-3">First Innings</div>
+                                        {getTeamDisplay && getTeamDisplay(matchState.bowlingTeam).logo && (
+                                            <img 
+                                                src={getTeamDisplay(matchState.bowlingTeam).logo} 
+                                                alt="Innings 1" 
+                                                className="w-16 h-16 object-contain mx-auto mb-3 opacity-80"
+                                            />
+                                        )}
+                                        <div className="text-slate-300 text-sm mb-4">
+                                            {getTeamDisplay ? getTeamDisplay(matchState.bowlingTeam).name : "Team A"}
+                                        </div>
                                     </div>
-                                    {tournPhase === "final" && (
-                                        <div className="text-brand-gold text-5xl font-broadcast">
-                                            {getTeamDisplay ? getTeamDisplay(matchState.winner).name : matchState.winner.name}
+                                    
+                                    <div className="bg-slate-800/50 rounded-lg p-6 space-y-4">
+                                        <div className="text-center">
+                                            <div className="text-slate-400 text-xs uppercase tracking-widest mb-1">Runs</div>
+                                            <div className="text-3xl font-broadcast font-bold text-white">
+                                                {matchState.innings1?.score || 0}
+                                            </div>
+                                        </div>
+                                        <div className="h-px bg-slate-700/50" />
+                                        <div className="text-center">
+                                            <div className="text-slate-400 text-xs uppercase tracking-widest mb-1">Wickets</div>
+                                            <div className="text-2xl font-broadcast font-bold text-white">
+                                                {matchState.innings1?.wickets || 0}
+                                            </div>
+                                        </div>
+                                        <div className="h-px bg-slate-700/50" />
+                                        <div className="text-center">
+                                            <div className="text-slate-400 text-xs uppercase tracking-widest mb-1">Overs</div>
+                                            <div className="text-xl font-broadcast font-bold text-brand-gold">
+                                                {(matchState.innings1?.overs || 0).toFixed(1)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* CENTER PANEL - Winner */}
+                            <div className="flex-1 flex flex-col items-center justify-start px-8 py-8 max-w-2xl overflow-y-auto max-h-screen">
+                                {/* Header section */}
+                                <div className="text-center mb-8 flex-shrink-0">
+                                    <div className="text-white text-5xl md:text-6xl font-broadcast font-bold mb-3">
+                                        MATCH OVER
+                                    </div>
+                                    <div className="h-1 w-32 bg-gradient-to-r from-transparent via-brand-gold to-transparent mx-auto" />
+                                </div>
+
+                                {/* Winner section */}
+                                {matchState.winner !== "Tie" && (
+                                    <div className="text-center mb-6 space-y-4 flex-shrink-0">
+                                        {/* Team Logo */}
+                                        {getTeamDisplay && getTeamDisplay(matchState.winner).logo && (
+                                            <div className="flex justify-center">
+                                                <img 
+                                                    src={getTeamDisplay(matchState.winner).logo} 
+                                                    alt={getTeamDisplay(matchState.winner).shortName} 
+                                                    className="w-20 h-20 object-contain opacity-90"
+                                                />
+                                            </div>
+                                        )}
+                                        
+                                        {/* Winner Name */}
+                                        <div className="space-y-2">
+                                            <div className="text-brand-gold text-xs font-bold uppercase tracking-widest">
+                                                {tournPhase === "final" ? "TOURNAMENT WINNER" : "MATCH WINNER"}
+                                            </div>
+                                            <div className="text-white text-3xl md:text-4xl font-broadcast font-bold">
+                                                {getTeamDisplay ? getTeamDisplay(matchState.winner).name : matchState.winner.name}
+                                            </div>
+                                        </div>
+
+                                        {/* Player name if online */}
+                                        {onlineRoom && (() => {
+                                            const player = onlineRoom.players?.find(p => p.side === matchState.winner.id);
+                                            return player && (
+                                                <div className="text-slate-400 text-xs">
+                                                    Managed by <span className="text-white font-semibold">{player.name}</span>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                )}
+
+                                {/* Tie message */}
+                                {matchState.winner === "Tie" && (
+                                    <div className="text-center mb-6 flex-shrink-0">
+                                        <div className="text-brand-gold text-3xl md:text-4xl font-broadcast font-bold mb-2">
+                                            MATCH TIED
+                                        </div>
+                                        <div className="text-slate-400 text-xs">
+                                            Both teams finished with equal runs
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Match Stats */}
+                                <div className="w-full bg-slate-800/40 rounded-lg p-4 border border-slate-700/50 mb-6 space-y-3 flex-shrink-0">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <div className="text-slate-400 text-xs uppercase tracking-widest font-bold">
+                                                Score
+                                            </div>
+                                            <div className="text-white text-2xl font-broadcast font-bold">
+                                                {matchState.score}/{matchState.wickets}
+                                            </div>
+                                            <div className="text-brand-gold text-xs">
+                                                {oversStr} overs
+                                            </div>
+                                        </div>
+
+                                        {matchState.innings === 2 && matchState.target !== null && (
+                                            <div className="space-y-2 border-l border-slate-600 pl-4">
+                                                <div className="text-slate-400 text-xs uppercase tracking-widest font-bold">
+                                                    Result
+                                                </div>
+                                                {matchState.score > matchState.target ? (
+                                                    <>
+                                                        <div className="text-emerald-400 text-xl font-broadcast font-bold">
+                                                            Won by {matchState.score - matchState.target} runs
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div className="text-red-400 text-xl font-broadcast font-bold">
+                                                            Lost by {matchState.target - matchState.score + 1} runs
+                                                        </div>
+                                                    </>
+                                                )}
+                                                <div className="text-slate-400 text-xs">
+                                                    Target: {matchState.target + 1}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Man of the Match */}
+                                {matchState.impactPlayer && matchState.impactPlayer.name && (
+                                    <div className="w-full bg-gradient-to-r from-amber-950/40 to-amber-900/20 rounded-lg p-4 border border-amber-700/30 flex-shrink-0">
+                                        <div className="text-amber-600 text-xs font-bold uppercase tracking-widest mb-2">
+                                            Player of the Match
+                                        </div>
+                                        <div className="text-white text-lg font-broadcast font-bold mb-1">
+                                            {matchState.impactPlayer.name}
+                                        </div>
+                                        <div className="text-amber-200 text-xs">
+                                            {matchState.impactPlayer.type === 'batsman' 
+                                                ? `${matchState.impactPlayer.stats.runs} runs (${matchState.impactPlayer.stats.balls} balls)`
+                                                : `${matchState.impactPlayer.stats.wickets} wickets • ${matchState.impactPlayer.stats.runs} conceded`
+                                            }
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* RIGHT PANEL - Innings 2 Stats / Bowling Team */}
+                            <div className="flex-1 flex flex-col items-center justify-center px-8 py-8 border-l border-slate-700/50">
+                                <div className="space-y-6">
+                                    <div className="text-center">
+                                        <div className="text-slate-500 text-xs uppercase tracking-widest font-bold mb-3">
+                                            {matchState.innings === 2 ? "Second Innings" : "Bowling Team"}
+                                        </div>
+                                        {getTeamDisplay && getTeamDisplay(matchState.battingTeam).logo && (
+                                            <img 
+                                                src={getTeamDisplay(matchState.battingTeam).logo} 
+                                                alt="Batting Team" 
+                                                className="w-16 h-16 object-contain mx-auto mb-3 opacity-80"
+                                            />
+                                        )}
+                                        <div className="text-slate-300 text-sm mb-4">
+                                            {getTeamDisplay ? getTeamDisplay(matchState.battingTeam).name : "Team B"}
+                                        </div>
+                                    </div>
+                                    
+                                    {matchState.innings === 2 ? (
+                                        <div className="bg-slate-800/50 rounded-lg p-6 space-y-4">
+                                            <div className="text-center">
+                                                <div className="text-slate-400 text-xs uppercase tracking-widest mb-1">Score</div>
+                                                <div className="text-3xl font-broadcast font-bold text-white">
+                                                    {matchState.score}/{matchState.wickets}
+                                                </div>
+                                            </div>
+                                            <div className="h-px bg-slate-700/50" />
+                                            <div className="text-center">
+                                                <div className="text-slate-400 text-xs uppercase tracking-widest mb-1">Target</div>
+                                                <div className="text-2xl font-broadcast font-bold text-brand-gold">
+                                                    {matchState.target + 1}
+                                                </div>
+                                            </div>
+                                            <div className="h-px bg-slate-700/50" />
+                                            <div className="text-center">
+                                                <div className="text-slate-400 text-xs uppercase tracking-widest mb-1">Status</div>
+                                                <div className={`text-lg font-broadcast font-bold ${matchState.score > matchState.target ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {matchState.score > matchState.target ? "Won" : "Lost"}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-slate-800/50 rounded-lg p-6 space-y-4 text-center">
+                                            <div>
+                                                <div className="text-slate-400 text-xs uppercase tracking-widest mb-2">Defending</div>
+                                                <div className="text-brand-gold text-2xl font-broadcast font-bold">
+                                                    {matchState.score || 0} Runs
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
-                                    {onlineRoom && (() => {
-                                        const player = onlineRoom.players?.find(p => p.side === matchState.winner.id);
-                                        return player && (
-                                            <div className="text-slate-300 text-2xl">
-                                                {player.name}
-                                            </div>
-                                        );
-                                    })()}
                                 </div>
-                                <div className="text-emerald-400 text-4xl font-bold">
-                                    {tournPhase === "final" ? "WINS THE TOURNAMENT!" : "WINS THE MATCH!"}
-                                </div>
-                            </>
-                        )}
-
-                        <div className="mt-12 space-y-4 bg-slate-900/50 backdrop-blur-sm rounded-3xl p-8 border border-slate-700">
-                            <div className="text-slate-300 text-2xl">
-                                <span className="font-broadcast text-white">{batTeam.name}:</span> {matchState.score}/{matchState.wickets} ({oversStr})
                             </div>
-                            {matchState.innings === 2 && matchState.target && (
-                                <div className="text-slate-400 text-xl">
-                                    Target: {matchState.target + 1}
-                                </div>
-                            )}
                         </div>
 
-                        <button
-                            onClick={endMatch}
-                            className="mt-12 px-16 py-6 bg-gradient-to-r from-brand-gold to-yellow-500 hover:from-yellow-400 hover:to-brand-gold text-black font-broadcast text-3xl rounded-2xl shadow-2xl transition-all transform hover:scale-105"
-                        >
-                            {matchState.mode === "tourn" ? "RETURN TO HUB" : "RETURN TO MENU"}
-                        </button>
+                        {/* Bottom Action Buttons - Full Width with proper spacing */}
+                        <div className="flex-shrink-0 w-full bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent pt-8 pb-8 px-8 flex gap-4 justify-center border-t border-slate-700/50">
+                            <button
+                                onClick={() => setView && setView("match_summary")}
+                                className="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-white font-broadcast text-base rounded-lg transition-colors border border-slate-600 hover:border-slate-500"
+                            >
+                                VIEW SCORECARD
+                            </button>
+                            <button
+                                onClick={endMatch}
+                                className="px-8 py-3 bg-brand-gold hover:bg-yellow-500 text-slate-900 font-broadcast text-base font-bold rounded-lg transition-colors"
+                            >
+                                {matchState.mode === "tourn" ? "RETURN TO HUB" : "RETURN TO MENU"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -565,7 +807,11 @@ const MatchCenter = ({
                         <div className="font-broadcast text-3xl leading-none text-white">
                             {getTeamDisplay ? getTeamDisplay(batTeam).name : batTeam.name}
                         </div>
-                        {onlineRoom && (() => {
+                        {matchState.playerName ? (
+                            <div className="text-xs text-slate-300 mt-0.5 font-semibold">
+                                {matchState.playerName}
+                            </div>
+                        ) : onlineRoom && (() => {
                             const player = onlineRoom.players?.find(p => p.side === batTeam.id);
                             return player && (
                                 <div className="text-xs text-slate-400 mt-0.5">
@@ -656,7 +902,11 @@ const MatchCenter = ({
                     <div className="font-broadcast text-3xl leading-none text-white text-right">
                         {getTeamDisplay ? getTeamDisplay(bowlTeam).name : bowlTeam.name}
                     </div>
-                    {onlineRoom && (() => {
+                    {matchState.playerName ? (
+                        <div className="text-xs text-slate-300 mt-0.5 font-semibold text-right">
+                            {matchState.playerName}
+                        </div>
+                    ) : onlineRoom && (() => {
                         const player = onlineRoom.players?.find(p => p.side === bowlTeam.id);
                         return player && (
                             <div className="text-xs text-slate-400 mt-0.5 text-right">
@@ -766,11 +1016,7 @@ const MatchCenter = ({
                                             }`}
                                         >
                                             {isOnline && !canControl ? (
-                                                isSpectator ? (
-                                                    <>👁️ SPECTATING...</>
-                                                ) : (
-                                                    <>⏳ WAITING FOR BOWLER...</>
-                                                )
+                                                <>⏳ WAITING FOR BOWLER...</>
                                             ) : (
                                                 <>
                                                     BOWL 1 BALL{" "}

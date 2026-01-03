@@ -135,7 +135,7 @@ io.on("connection", (socket) => {
 
   socket.on("createRoom", async (data, callback) => {
     try {
-      const { mode, playerName } = data;
+      const { mode, playerName, name } = data;
       const roomCode = generateRoomCode();
       const room = getOrCreateRoom(roomCode);
 
@@ -144,7 +144,7 @@ io.on("connection", (socket) => {
       room.players.push({
         socketId: socket.id,
         playerId: `player_${socket.id.slice(0, 8)}`,
-        name: playerName || "Player 1",
+        name: playerName || name || "Player 1",
         side: "A",
         teamPlayers: [],
         isReady: false,
@@ -181,7 +181,7 @@ io.on("connection", (socket) => {
 
   socket.on("joinRoom", async (data, callback) => {
     try {
-      const { code, playerName } = data;
+      const { code, playerName, name } = data;
       const roomCode = code.toUpperCase();
       const room = getOrCreateRoom(roomCode);
 
@@ -203,13 +203,13 @@ io.on("connection", (socket) => {
       const newPlayer = {
         socketId: socket.id,
         playerId: `player_${socket.id.slice(0, 8)}`,
-        name: playerName || `Player ${room.players.length + 1}`,
+        name: playerName || name || `Player ${room.players.length + 1}`,
         side,
         teamPlayers: [],
         isReady: false,
       };
       
-      console.log(`👤 Assigning side: ${side} to player ${playerName} (position ${room.players.length})`);
+      console.log(`👤 Assigning side: ${side} to player ${playerName || name} (position ${room.players.length})`);
 
       room.players.push(newPlayer);
       userSockets.set(socket.id, {
@@ -322,6 +322,26 @@ io.on("connection", (socket) => {
       console.error(`❌ Player not found: ${socket.id} in room ${code}`);
       console.error(`Available players:`, room.players.map(p => ({ name: p.name, socketId: p.socketId })));
     }
+  });
+
+  // -------- PLAYER READY SYSTEM --------
+  // Guest emits playerReady when they click "MARK AS READY" button
+  // Server broadcasts this to all players in the room so host can track readiness
+
+  socket.on("playerReady", (data) => {
+    console.log(`🟢 Received playerReady: roomCode=${data.roomCode}, socketId=${data.socketId}`);
+    const room = rooms.get(data.roomCode);
+    if (!room) {
+      console.error(`❌ Room not found for playerReady: ${data.roomCode}`);
+      return;
+    }
+
+    // Broadcast to all players in the room
+    console.log(`📢 Broadcasting playerReady to room ${data.roomCode}`);
+    io.to(data.roomCode).emit("playerReady", {
+      roomCode: data.roomCode,
+      socketId: data.socketId
+    });
   });
 
   // -------- TEAM SETUP --------
