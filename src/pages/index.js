@@ -13,7 +13,6 @@ import TournDraftPage from './TournDraftPage';
 import TournHubPage from './TournHubPage';
 import OnlineEntryPage from './OnlineEntryPage';
 import OnlineMenuPage from './OnlineMenuPage';
-import AuctionLobbyPage from './AuctionLobbyPage';
 
 export const PAGE_REGISTRY = {
   menu: MenuPage,
@@ -23,7 +22,6 @@ export const PAGE_REGISTRY = {
   tourn_hub: TournHubPage,
   online_entry: OnlineEntryPage,
   online_menu: OnlineMenuPage,
-  auction_lobby: AuctionLobbyPage,
   // Note: 'match' and 'auction' are handled separately in App.jsx
   // as they use MatchCenter and AuctionRoom components
 };

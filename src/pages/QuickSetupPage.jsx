@@ -111,13 +111,6 @@ const QuickSetupPage = ({
             </button>
           )}
 
-          <button
-            onClick={() => setView("menu")}
-            className="px-6 py-3 rounded-full border border-slate-700 text-slate-400 hover:text-white hover:border-white hover:bg-white/5 transition-all font-bold text-xs uppercase tracking-widest"
-          >
-            Back to Menu
-          </button>
-
           {/* Players Ready Status */}
           {isOnline && onlineRoom?.players && onlineRoom.players.length > 0 && (
             <div className="px-6 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-slate-300 text-sm font-semibold text-center">

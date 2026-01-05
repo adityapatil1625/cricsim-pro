@@ -4,16 +4,16 @@
  */
 
 export const IPL_TEAMS = [
-  { id: "MI", name: "Mumbai Indians", color: "#004BA0", logo: "https://scores.iplt20.com/ipl/teamlogos/MI.png" },
-  { id: "CSK", name: "Chennai Super Kings", color: "#FDB913", logo: "https://scores.iplt20.com/ipl/teamlogos/CSK.png" },
-  { id: "RCB", name: "Royal Challengers Bangalore", color: "#EC1C24", logo: "https://scores.iplt20.com/ipl/teamlogos/RCB.png" },
-  { id: "KKR", name: "Kolkata Knight Riders", color: "#3A225D", logo: "https://scores.iplt20.com/ipl/teamlogos/KKR.png" },
-  { id: "DC", name: "Delhi Capitals", color: "#004C93", logo: "https://scores.iplt20.com/ipl/teamlogos/DC.png" },
-  { id: "PBKS", name: "Punjab Kings", color: "#ED1B24", logo: "https://scores.iplt20.com/ipl/teamlogos/PBKS.png" },
-  { id: "RR", name: "Rajasthan Royals", color: "#254AA5", logo: "https://scores.iplt20.com/ipl/teamlogos/RR.png" },
-  { id: "SRH", name: "Sunrisers Hyderabad", color: "#FF822A", logo: "https://scores.iplt20.com/ipl/teamlogos/SRH.png" },
-  { id: "LSG", name: "Lucknow Super Giants", color: "#1C4595", logo: "https://scores.iplt20.com/ipl/teamlogos/LSG.png" },
-  { id: "GT", name: "Gujarat Titans", color: "#1C2E4A", logo: "https://scores.iplt20.com/ipl/teamlogos/GT.png" }
+  { id: "MI", name: "Mumbai Indians", color: "#004BA0", logo: "https://scores.iplt20.com/ipl/teamlogos/MI.png", auctionPurse: 90 },
+  { id: "CSK", name: "Chennai Super Kings", color: "#FDB913", logo: "https://scores.iplt20.com/ipl/teamlogos/CSK.png", auctionPurse: 90 },
+  { id: "RCB", name: "Royal Challengers Bangalore", color: "#EC1C24", logo: "https://scores.iplt20.com/ipl/teamlogos/RCB.png", auctionPurse: 90 },
+  { id: "KKR", name: "Kolkata Knight Riders", color: "#3A225D", logo: "https://scores.iplt20.com/ipl/teamlogos/KKR.png", auctionPurse: 90 },
+  { id: "DC", name: "Delhi Capitals", color: "#004C93", logo: "https://scores.iplt20.com/ipl/teamlogos/DC.png", auctionPurse: 90 },
+  { id: "PBKS", name: "Punjab Kings", color: "#ED1B24", logo: "https://scores.iplt20.com/ipl/teamlogos/PBKS.png", auctionPurse: 90 },
+  { id: "RR", name: "Rajasthan Royals", color: "#254AA5", logo: "https://scores.iplt20.com/ipl/teamlogos/RR.png", auctionPurse: 90 },
+  { id: "SRH", name: "Sunrisers Hyderabad", color: "#FF822A", logo: "https://scores.iplt20.com/ipl/teamlogos/SRH.png", auctionPurse: 90 },
+  { id: "LSG", name: "Lucknow Super Giants", color: "#1C4595", logo: "https://scores.iplt20.com/ipl/teamlogos/LSG.png", auctionPurse: 90 },
+  { id: "GT", name: "Gujarat Titans", color: "#1C2E4A", logo: "https://scores.iplt20.com/ipl/teamlogos/GT.png", auctionPurse: 90 }
 ];
 
 export const VIEW_TO_PATH = {
@@ -27,7 +27,6 @@ export const VIEW_TO_PATH = {
   match: "/match",
   match_over: "/match/over",
   match_summary: "/match/summary",
-  auction_lobby: "/auction/lobby",
   auction: "/auction/room",
 };
 

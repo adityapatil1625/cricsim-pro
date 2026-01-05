@@ -18,7 +18,7 @@
  * - TournamentBracket: Tournament bracket component
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import TournamentLeaderboards from '../components/tournament/TournamentLeaderboards';
 import TournamentBracket from '../components/tournament/TournamentBracket';
 
@@ -32,11 +32,42 @@ const TournHubPage = ({
   setView,
   handleStartTournamentFixture,
   onlineRoom,
+  socket,
+  isOnline,
+  isOnlineHost,
+  matchEntryReady,
+  setMatchEntryReady,
+  pendingMatchFixture,
+  setPendingMatchFixture,
+  proceedToMatch,
+  currentlyPlayingMatch,
 }) => {
+  // Auto-start match when both players mark as ready
+  useEffect(() => {
+    if (!pendingMatchFixture || !isOnline || !onlineRoom) return;
+    
+    const t1Player = onlineRoom.players?.find(p => p.side === pendingMatchFixture.t1);
+    const t2Player = onlineRoom.players?.find(p => p.side === pendingMatchFixture.t2);
+    
+    // Check if both players are ready
+    const bothReady = matchEntryReady[t1Player?.socketId] && matchEntryReady[t2Player?.socketId];
+    
+    if (bothReady) {
+      console.log(`🎬 Both players ready! Starting match ${pendingMatchFixture.id}`);
+      // Emit event to notify other player to start
+      socket.emit("bothPlayersReady", {
+        roomCode: onlineRoom.code,
+        fixtureId: pendingMatchFixture.id
+      });
+      // Start the match immediately
+      proceedToMatch(pendingMatchFixture);
+    }
+  }, [matchEntryReady, pendingMatchFixture, isOnline, onlineRoom, socket, proceedToMatch]);
+
   return (
-      <div className="min-h-screen p-8 bg-slate-950 relative">
+      <div className="min-h-screen bg-slate-950 relative">
         <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-brand-gold/5 to-transparent pointer-events-none" />
-        <div className="max-w-7xl mx-auto relative z-10">
+        <div className="max-w-7xl mx-auto relative z-10 pb-32 p-8">
           <header className="flex justify-between items-end mb-12 border-b border-white/10 pb-8">
             <div>
               <h1 className="font-broadcast text-8xl text-transparent bg-clip-text bg-gradient-to-br from-brand-gold to-white drop-shadow-lg">
@@ -217,10 +248,24 @@ const TournHubPage = ({
                   </div>
                 </div>
                 <div className="p-4 space-y-3 overflow-y-auto max-h-[600px] custom-scrollbar">
-                  {fixtures.map((f) => {
+                  {fixtures.map((f, index) => {
                     const t1 = tournTeams.find((t) => t.id === f.t1);
                     const t2 = tournTeams.find((t) => t.id === f.t2);
                     if (!t1 || !t2) return null;
+
+                    // Get first unplayed fixture
+                    const firstUnplayedIndex = fixtures.findIndex(fixture => !fixture.played);
+                    const isFirstMatch = index === firstUnplayedIndex;
+                    
+                    // Check if current player is participating in this match
+                    let isParticipant = false;
+                    if (isOnline && onlineRoom && socket) {
+                      const myTeamId = onlineRoom.players?.find(p => p.socketId === socket.id)?.side;
+                      isParticipant = myTeamId === f.t1 || myTeamId === f.t2;
+                    } else {
+                      // In offline mode, player controls both teams, so always a participant
+                      isParticipant = true;
+                    }
 
                     const isKnockout = f.stage === "semi" || f.stage === "final";
                     const isFinal = f.stage === "final";
@@ -242,7 +287,8 @@ const TournHubPage = ({
                                       ? "bg-gradient-to-br from-yellow-900/40 via-amber-900/40 to-orange-900/40 border-brand-gold shadow-2xl shadow-brand-gold/20"
                                       : "bg-gradient-to-br from-purple-900/40 via-pink-900/40 to-red-900/40 border-purple-500 shadow-xl shadow-purple-500/20"
                                     : "bg-gradient-to-r from-slate-800 to-slate-900 border-slate-700 hover:border-brand-gold/30 shadow-lg"
-                            } ${isKnockout && !f.played ? "scale-105" : ""}`}
+                            } ${isKnockout && !f.played ? "scale-105" : ""} ${!f.played && !isFirstMatch ? "opacity-50" : ""}`}
+                            title={!f.played && !isFirstMatch ? "Only the first match can be played" : ""}
                         >
                           <div className="flex flex-col gap-1 flex-1 min-w-0">
                             {isKnockout && (
@@ -300,18 +346,46 @@ const TournHubPage = ({
                             )}
                           </div>
                           {!f.played ? (
-                              <button
-                                  onClick={() => handleStartTournamentFixture(f)}
-                                  className={`flex-shrink-0 ml-2 ${
-                                    isKnockout
-                                      ? isFinal
-                                        ? "bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-400 hover:to-amber-500 h-14 w-14 text-xl"
-                                        : "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 h-12 w-12 text-lg"
-                                      : "bg-white hover:bg-brand-gold h-10 w-10"
-                                  } text-black rounded-full flex items-center justify-center transition-all shadow-lg group-hover:scale-110`}
-                              >
-                                ▶
-                              </button>
+                              currentlyPlayingMatch === f.id && !isParticipant ? (
+                                // Spectator can watch a currently playing match
+                                <button
+                                    onClick={() => {
+                                      proceedToMatch(f, true);
+                                    }}
+                                    className="flex-shrink-0 ml-2 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white text-xs px-4 py-2 rounded-lg transition-colors font-bold uppercase tracking-wider animate-pulse"
+                                    title="Watch this match that is currently live"
+                                >
+                                  🔴 WATCH LIVE
+                                </button>
+                              ) : isFirstMatch ? (
+                                isParticipant ? (
+                                  <button
+                                      onClick={() => handleStartTournamentFixture(f)}
+                                      className={`flex-shrink-0 ml-2 ${
+                                        isKnockout
+                                          ? isFinal
+                                            ? "bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-400 hover:to-amber-500 h-14 w-14 text-xl"
+                                            : "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 h-12 w-12 text-lg"
+                                          : "bg-white hover:bg-brand-gold h-10 w-10"
+                                      } text-black rounded-full flex items-center justify-center transition-all shadow-lg group-hover:scale-110`}
+                                      title="You are playing in this match"
+                                  >
+                                    ▶
+                                  </button>
+                                ) : (
+                                  <button
+                                      onClick={() => handleStartTournamentFixture(f)}
+                                      className="flex-shrink-0 ml-2 bg-slate-600 hover:bg-slate-500 text-white text-xs px-3 py-2 rounded-lg transition-colors font-bold uppercase tracking-wider"
+                                      title="Watch this match as a spectator"
+                                  >
+                                    Spectate
+                                  </button>
+                                )
+                              ) : (
+                                <div className="flex-shrink-0 ml-2 bg-slate-700 text-slate-400 text-xs px-3 py-2 rounded-lg font-bold uppercase tracking-wider opacity-50 cursor-not-allowed">
+                                  Locked
+                                </div>
+                              )
                           ) : (
                               <button
                                   onClick={() => setSelectedFixture(f)}
@@ -497,8 +571,100 @@ const TournHubPage = ({
           )}
         </div>
 
+        {/* Match Entry Ready Screen */}
+        {pendingMatchFixture && isOnline && onlineRoom && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 rounded-3xl max-w-2xl w-full border-2 border-blue-500 shadow-2xl shadow-blue-900/50 p-8">
+              <h2 className="font-broadcast text-4xl text-center text-white mb-8">Ready to Enter Match?</h2>
+              
+              {(() => {
+                const t1 = tournTeams.find(t => t.id === pendingMatchFixture.t1);
+                const t2 = tournTeams.find(t => t.id === pendingMatchFixture.t2);
+                const myTeamId = onlineRoom.players?.find(p => p.socketId === socket.id)?.side;
+                const isParticipant = myTeamId === pendingMatchFixture.t1 || myTeamId === pendingMatchFixture.t2;
+                
+                const t1Player = onlineRoom.players?.find(p => p.side === pendingMatchFixture.t1);
+                const t2Player = onlineRoom.players?.find(p => p.side === pendingMatchFixture.t2);
+                
+                return (
+                  <div className="space-y-8">
+                    {/* Teams Display */}
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="bg-blue-900/30 border border-blue-500 rounded-xl p-6 text-center">
+                        {t1?.id && <img src={getTeamDisplay(t1).logo} alt={t1.name} className="w-12 h-12 mx-auto mb-3 object-contain" />}
+                        <div className="font-broadcast text-xl text-white mb-2">{t1?.name}</div>
+                        <div className="text-sm text-slate-400">{t1Player?.name || "Waiting..."}</div>
+                        {matchEntryReady[t1Player?.socketId] && (
+                          <div className="text-green-400 font-bold text-xs mt-2">✓ READY</div>
+                        )}
+                      </div>
+                      
+                      <div className="bg-red-900/30 border border-red-500 rounded-xl p-6 text-center">
+                        {t2?.id && <img src={getTeamDisplay(t2).logo} alt={t2.name} className="w-12 h-12 mx-auto mb-3 object-contain" />}
+                        <div className="font-broadcast text-xl text-white mb-2">{t2?.name}</div>
+                        <div className="text-sm text-slate-400">{t2Player?.name || "Waiting..."}</div>
+                        {matchEntryReady[t2Player?.socketId] && (
+                          <div className="text-green-400 font-bold text-xs mt-2">✓ READY</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-4 justify-center">
+                      {isParticipant ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              setMatchEntryReady(prev => ({
+                                ...prev,
+                                [socket.id]: true
+                              }));
+                              socket.emit("matchEntryReady", {
+                                roomCode: onlineRoom.code,
+                                fixtureId: pendingMatchFixture.id,
+                                socketId: socket.id
+                              });
+                              console.log("✓ Ready for match");
+                            }}
+                            disabled={matchEntryReady[socket.id]}
+                            className="px-10 py-3 bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-500 hover:to-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-broadcast text-lg rounded-full transition-all"
+                          >
+                            {matchEntryReady[socket.id] ? "✓ YOU'RE READY!" : "MARK AS READY"}
+                          </button>
+                        </>
+                      ) : (
+                        <div className="text-center text-slate-300 py-4">
+                          <p className="mb-4">You are spectating this match</p>
+                          <button
+                            onClick={() => {
+                              proceedToMatch(pendingMatchFixture, true);
+                            }}
+                            className="px-10 py-3 bg-slate-600 hover:bg-slate-500 text-white font-bold text-sm rounded-lg transition-colors"
+                          >
+                            Watch Match
+                          </button>
+                        </div>
+                      )}
+                      
+                      <button
+                        onClick={() => {
+                          setPendingMatchFixture(null);
+                          setMatchEntryReady({});
+                        }}
+                        className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold text-sm rounded-full transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
         {/* Navigation Footer */}
-        <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 to-slate-950/80 border-t border-slate-700/50 px-8 py-6 flex justify-between items-center gap-4 flex-wrap">
+        <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 to-slate-950/80 border-t border-slate-700/50 px-8 py-6 flex justify-between items-center gap-4 flex-wrap z-10">
           <button
             onClick={() => setView("menu")}
             className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors"

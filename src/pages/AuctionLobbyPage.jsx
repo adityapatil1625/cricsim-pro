@@ -35,16 +35,34 @@ const AuctionLobbyPage = ({
   showGuestReadyModal,
   setShowGuestReadyModal,
 }) => {
+  // For online auction, redirect directly to auction room (franchise already selected in OnlineMenuPage)
+  React.useEffect(() => {
+    if (isOnline && onlineRoom?.mode === "auction") {
+      setView("auction");
+    }
+  }, [isOnline, onlineRoom?.mode, setView]);
+
+  // Debug: Log host status
+  React.useEffect(() => {
+    console.log(`🎯 AuctionLobbyPage: isOnline=${isOnline}, isOnlineHost=${isOnlineHost}, socket.id=${socket?.id}, room.host=${onlineRoom?.host}`);
+  }, [isOnline, isOnlineHost, socket, onlineRoom?.host]);
+
+  // If online auction, show loading screen while redirecting
+  if (isOnline && onlineRoom?.mode === "auction") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-4 border-brand-gold border-t-transparent rounded-full animate-spin" />
+          <p className="text-slate-400">Starting auction...</p>
+        </div>
+      </div>
+    );
+  }
+
   const players = isOnline ? onlineRoom?.players || [] : auctionTeams;
   
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 relative overflow-hidden p-4">
-      <button
-        onClick={() => setView("menu")}
-        className="absolute top-6 left-6 px-4 py-2 rounded-full border border-slate-700 text-slate-400 hover:text-white hover:border-white hover:bg-white/5 transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-2"
-      >
-        <ChevronLeft size={16} /> Back to Menu
-      </button>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/20 via-slate-950 to-slate-950" />
       
       <div className="relative z-10 glass-panel rounded-3xl p-8 w-full max-w-4xl bg-slate-950/80">
@@ -134,29 +152,18 @@ const AuctionLobbyPage = ({
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex justify-between items-center">
-          <button
-            onClick={() => {
-              setAuctionTeams([]);
-              setView(isOnline ? "online_menu" : "menu");
-            }}
-            className="text-slate-400 hover:text-white px-6 py-2 transition-colors uppercase tracking-widest text-xs font-bold"
-          >
-            ← Back
-          </button>
-
-          {/* Players Ready Status */}
+        {/* Actions - Players Ready Status */}
+        <div className="mb-6">
           {isOnline && onlineRoom?.players && onlineRoom.players.length > 0 && (
             <div className="px-6 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-slate-300 text-sm font-semibold text-center">
               🟢 Ready: {Object.values(playersReady).filter(Boolean).length} / {onlineRoom.players.length}
             </div>
           )}
           
-          {isOnline && !isOnlineHost ? (
+          {isOnline && !isOnlineHost && (
             // GUEST: Ready button or waiting message
             playersReady[socket.id] ? (
-              <p className="text-emerald-400 text-sm font-bold">✓ You're Ready! Waiting for host...</p>
+              <p className="text-emerald-400 text-sm font-bold text-center">✓ You're Ready! Waiting for host...</p>
             ) : (
               <button
                 onClick={() => {
@@ -172,35 +179,11 @@ const AuctionLobbyPage = ({
                   socket.emit("playerReady", { roomCode: onlineRoom.code, socketId: socket.id });
                   console.log("✓ Guest marked as ready for auction");
                 }}
-                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-sm px-6 py-2 rounded-lg transition-all"
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-sm px-6 py-2 rounded-lg transition-all"
               >
                 ✓ MARK AS READY
               </button>
             )
-          ) : (
-            // HOST: Start button
-            <button
-              onClick={() => {
-                const readyPlayers = players.filter(p => p.iplTeam);
-                if (readyPlayers.length < 2) {
-                  alert("Need at least 2 players to start auction");
-                  return;
-                }
-                
-                if (isOnline) {
-                  socket.emit("startAuction", { code: onlineRoom.code });
-                  setView("auction");
-                  setIsHostReady(false);
-                  setPlayersReady({});
-                } else {
-                  setView("auction");
-                }
-              }}
-              disabled={players.filter(p => p.iplTeam).length < 2 || (isOnline && (onlineRoom?.players?.length < 2 || onlineRoom?.players?.some(p => p.socketId !== socket.id && !playersReady[p.socketId])))}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-broadcast text-xl px-8 py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              START AUCTION
-            </button>
           )}
         </div>
 
@@ -243,6 +226,16 @@ const AuctionLobbyPage = ({
               className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors"
             >
               🌐 Online
+            </button>
+            
+            {/* ENTER AUCTION - Go to auction room */}
+            <button
+              onClick={() => setView("auction")}
+              disabled={isOnline && onlineRoom?.players?.some(p => p.socketId !== socket.id && !playersReady[p.socketId])}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-broadcast text-lg px-8 py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              title={isOnline && onlineRoom?.players?.some(p => p.socketId !== socket.id && !playersReady[p.socketId]) ? "Wait for all guests to mark ready" : ""}
+            >
+              🚀 ENTER AUCTION
             </button>
           </div>
         </div>

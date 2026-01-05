@@ -63,6 +63,12 @@ const TournSetupPage = ({
   setJoinCode,
   joinError,
   setJoinError,
+  isHostReady,
+  setIsHostReady,
+  playersReady,
+  setPlayersReady,
+  showGuestReadyModal,
+  setShowGuestReadyModal,
 }) => {
   // For online tournament, show team selection like quick_setup
   if (isOnline && onlineRoom?.mode === "tournament") {
@@ -198,13 +204,14 @@ const TournSetupPage = ({
               </div>
             )}
             
+            {/* Players Ready Status */}
+            {onlineRoom?.players && onlineRoom.players.length > 0 && (
+              <div className="px-6 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-slate-300 text-sm font-semibold text-center">
+                🟢 Ready: {Object.values(playersReady).filter(Boolean).length} / {onlineRoom.players.length}
+              </div>
+            )}
+            
             <div className="flex justify-between items-center">
-              <button
-                  onClick={() => setView("online_menu")}
-                  className="text-slate-400 hover:text-white px-6 py-2 transition-colors uppercase tracking-widest text-xs font-bold"
-              >
-                ← Back
-              </button>
               {isOnlineHost ? (
                   <button
                       onClick={() => {
@@ -289,14 +296,32 @@ const TournSetupPage = ({
                           });
                         }, 100);
                       }}
-                      className="bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-500 hover:to-emerald-600 text-white font-broadcast text-xl px-8 py-3 rounded-xl transition-all"
+                      disabled={onlineRoom?.players?.some(p => p.socketId !== socket.id && !playersReady[p.socketId])}
+                      className="bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-500 hover:to-emerald-600 text-white font-broadcast text-xl px-8 py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     START TOURNAMENT
                   </button>
               ) : (
-                  <p className="text-slate-400 text-sm">
-                    Waiting for host to start tournament...
-                  </p>
+                  // GUEST: Ready button or waiting message
+                  playersReady[socket.id] ? (
+                    <div className="bg-blue-900/40 border border-blue-500 text-blue-300 px-8 py-3 rounded-full font-broadcast text-lg text-center">
+                      ✓ YOU'RE READY!
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setPlayersReady(prev => ({
+                          ...prev,
+                          [socket.id]: true
+                        }));
+                        socket.emit("playerReady", { roomCode: onlineRoom.code, socketId: socket.id });
+                        console.log("✓ Guest marked as ready for tournament setup");
+                      }}
+                      className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-8 py-3 rounded-full font-broadcast text-lg hover:scale-105 transition-transform shadow-xl shadow-blue-900/20"
+                    >
+                      ✓ MARK AS READY
+                    </button>
+                  )
               )}
             </div>
           </div>
@@ -406,7 +431,9 @@ const TournSetupPage = ({
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 to-slate-950/80 border-t border-slate-700/50 px-8 py-6 flex justify-between items-center gap-4 flex-wrap">
           <button
             onClick={() => setView("menu")}
-            className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors"
+            disabled={isOnline && onlineRoom?.players?.length < 2}
+            className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={isOnline && onlineRoom?.players?.length < 2 ? "Cannot navigate during online play" : ""}
           >
             ← Back to Menu
           </button>
@@ -416,7 +443,9 @@ const TournSetupPage = ({
                 setActiveTeamSelect("A");
                 setView("quick_setup");
               }}
-              className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors"
+              disabled={isOnline && onlineRoom?.players?.length < 2}
+              className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={isOnline && onlineRoom?.players?.length < 2 ? "Cannot navigate during online play" : ""}
             >
               ⚡ Quick Play
             </button>
@@ -428,7 +457,9 @@ const TournSetupPage = ({
                 setJoinError("");
                 setView("online_entry");
               }}
-              className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors"
+              disabled={isOnline && onlineRoom?.players?.length < 2}
+              className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={isOnline && onlineRoom?.players?.length < 2 ? "Cannot navigate during online play" : ""}
             >
               🌐 Online
             </button>
@@ -440,7 +471,9 @@ const TournSetupPage = ({
                 setJoinError("");
                 setView("online_entry");
               }}
-              className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors"
+              disabled={isOnline && onlineRoom?.players?.length < 2}
+              className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={isOnline && onlineRoom?.players?.length < 2 ? "Cannot navigate during online play" : ""}
             >
               🔨 Auction
             </button>

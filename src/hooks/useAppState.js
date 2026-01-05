@@ -6,7 +6,7 @@ import { useState } from 'react';
  */
 export const useAppState = () => {
   // View management
-  const [view, setView] = useState("menu"); // menu | quick_setup | tourn_setup | tourn_draft | tourn_hub | online_entry | online_menu | match | auction_lobby | auction
+  const [view, setView] = useState("menu"); // menu | quick_setup | tourn_setup | tourn_draft | tourn_hub | online_entry | online_menu | match | auction
   
   // Quick play teams
   const [teamA, setTeamA] = useState({
@@ -48,6 +48,13 @@ export const useAppState = () => {
   const [isHostReady, setIsHostReady] = useState(false);
   const [playersReady, setPlayersReady] = useState({}); // { socketId: true/false }
   const [showGuestReadyModal, setShowGuestReadyModal] = useState(false);
+  
+  // Match entry ready system for league hub
+  const [matchEntryReady, setMatchEntryReady] = useState({}); // { socketId: true/false }
+  const [pendingMatchFixture, setPendingMatchFixture] = useState(null); // Fixture waiting for ready confirmation
+  
+  // Currently playing match (for spectator view)
+  const [currentlyPlayingMatch, setCurrentlyPlayingMatch] = useState(null); // Fixture ID of match in progress
   
   // Auction state
   const [auctionTeams, setAuctionTeams] = useState([]);
@@ -112,6 +119,12 @@ export const useAppState = () => {
     setPlayersReady,
     showGuestReadyModal,
     setShowGuestReadyModal,
+    matchEntryReady,
+    setMatchEntryReady,
+    pendingMatchFixture,
+    setPendingMatchFixture,
+    currentlyPlayingMatch,
+    setCurrentlyPlayingMatch,
     
     // Auction
     auctionTeams,

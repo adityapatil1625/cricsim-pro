@@ -32,12 +32,6 @@ const OnlineEntryPage = ({
 }) => {
   return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4 relative">
-        <button
-          onClick={() => setView("menu")}
-          className="absolute top-6 left-6 px-4 py-2 rounded-full border border-slate-700 text-slate-400 hover:text-white hover:border-white hover:bg-white/5 transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-2"
-        >
-          <ChevronLeft size={16} /> Back to Menu
-        </button>
         <div className="glass-panel rounded-3xl p-8 w-full max-w-md bg-slate-950/80">
           <h2 className="font-broadcast text-4xl text-white mb-2">
             Play with Friends
@@ -127,13 +121,6 @@ const OnlineEntryPage = ({
                 className="w-full bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-lg py-2 text-sm font-bold uppercase tracking-widest border border-slate-600"
             >
               Join Room
-            </button>
-
-            <button
-                onClick={() => setView("menu")}
-                className="w-full text-xs text-slate-500 hover:text-slate-300 mt-2"
-            >
-              ← Back to Menu
             </button>
           </div>
         </div>

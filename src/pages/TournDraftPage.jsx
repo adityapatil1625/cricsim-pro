@@ -57,12 +57,6 @@ const TournDraftPage = ({
             </p>
           </div>
           <div className="flex gap-4">
-            <button
-                onClick={() => setView("menu")}
-                className="px-6 py-3 rounded-full border border-slate-700 text-slate-400 hover:text-white hover:border-white hover:bg-white/5 transition-all font-bold text-xs uppercase tracking-widest"
-            >
-              Back to Menu
-            </button>
             {isOnline && !isOnlineHost ? (
               // GUEST: Ready button or waiting message
               playersReady[socket.id] ? (

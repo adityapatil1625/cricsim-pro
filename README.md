@@ -1,6 +1,378 @@
-# 🎮 CricSim Pro - Multiplayer Cricket Simulation Platform
+# 🎮 CricSim Pro v3 - IPL Auction & Cricket Simulator
 
-A complete, production-ready multiplayer cricket simulation game built with **React** + **Node.js** + **Socket.IO**.
+A production-ready multiplayer IPL auction and cricket simulation platform with real-time Socket.IO synchronization.
+
+---
+
+## 📋 Table of Contents
+
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Tech Stack](#tech-stack)
+4. [Quick Start](#quick-start)
+5. [Project Structure](#project-structure)
+6. [Installation & Setup](#installation--setup)
+7. [Development](#development)
+8. [IPL Auction System](#ipl-auction-system)
+9. [Multiplayer Features](#multiplayer-features)
+10. [Deployment](#deployment)
+
+---
+
+## Overview
+
+**CricSim Pro v3** is an IPL-themed cricket simulation platform featuring:
+- 🏆 **Real IPL Player Database** - 574 players across 8 IPL teams
+- 💰 **Dynamic Auction System** - ₹90 Crore purse limit with role-based constraints
+- 👥 **Multiplayer Auction** - Real-time synchronized bidding (2+ players)
+- 📊 **Live Analytics** - Team stats, sold players, remaining purse tracking
+- 🎉 **Celebration Effects** - Confetti animations on player sales
+- 📱 **Responsive Design** - Works on desktop and tablets (Tailwind CSS)
+
+---
+
+## Features
+
+### IPL Auction System ✅
+- **574 Real IPL Players** organized into 78 auction sets
+- **Role Classification**: Wicket-keepers, Batters, All-rounders, Bowlers
+- **Squad Management**: 25-player limit with role balance tracking
+- **Purse System**: ₹90 Crore budget with real-time tracking
+- **Overseas Constraints**: Max 8 overseas players per team
+- **Dynamic Bid Increments**: Progressive bid amounts based on current price
+
+### Multiplayer Features ✅
+- **Real-time Synchronization**: Socket.IO bidding, queue sync, state management
+- **Room System**: Create/join auction rooms with unique codes
+- **Host Controls**: Start auction, skip players, manage phases
+- **Bid History**: Track all bids with team names and amounts
+- **Auction Log**: Complete activity timeline with timestamps
+
+### UI/UX Features ✅
+- **Modern Dark Theme**: Purple/gold gradient with slate backgrounds
+- **Sold Player Celebration**: Confetti bursts + visual overlay when player sells
+- **My Squad Panel**: Classified player view by role with stats
+- **Teams Overview**: Quick stats for all 8 teams
+- **Responsive Layout**: 3-section layout (sidebar | center | sidebar)
+- **Alert System**: Purse, squad size, and overseas limit warnings
+
+---
+
+## Tech Stack
+
+**Frontend:**
+- React 18.3.1
+- Tailwind CSS 3.x
+- Vite 6.4.1
+- Socket.IO Client
+- Canvas Confetti (celebration effects)
+
+**Backend:**
+- Node.js / Express
+- Socket.IO (real-time sync)
+- Redis (optional session store)
+
+**Data:**
+- Real IPL player dataset (574 players, 78 sets)
+- JSON-based configuration
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Node.js 20.x
+- npm 11.x
+
+### Windows Quick Launch
+```bash
+cd c:\Users\adity\Downloads\cricsim-pro-v3\cricsim-pro-v3
+start-dev.bat
+```
+
+### Manual Setup
+```bash
+# Install dependencies
+npm install
+
+# Start development server (frontend)
+npm run dev
+
+# In another terminal, start backend
+cd server
+npm install
+npm run dev
+
+# Frontend runs at http://localhost:5173
+# Backend runs at http://localhost:3001
+```
+
+---
+
+## Project Structure
+
+```
+cricsim-pro-v3/
+├── src/
+│   ├── components/auction/
+│   │   ├── AuctionRoom.jsx              # Main auction logic
+│   │   ├── AuctionPageLayout.jsx        # Layout wrapper
+│   │   ├── MySquadPanel.jsx             # Current player squad display
+│   │   ├── TeamsOverviewPanel.jsx       # All teams stats
+│   │   ├── BidHistorySidebar.jsx        # Bid history tracking
+│   │   ├── AuctionAnalytics.jsx         # Footer analytics (6 stat boxes)
+│   │   ├── AuctionAlerts.jsx            # Purse/squad warnings
+│   │   ├── SetContextDisplay.jsx        # Current set info & progress
+│   │   └── AdminControls.jsx            # Host-only controls
+│   ├── hooks/
+│   │   ├── useAppState.js
+│   │   ├── useMatchEngine.js
+│   │   └── useMultiplayer.js
+│   ├── data/
+│   │   ├── iplData.json                 # 574 real IPL players
+│   │   └── playerPoolV2.js              # Player processing utilities
+│   └── utils/
+│       ├── auctionEnhanced.js           # Validation & role management
+│       └── ballSimulation.js
+├── server/
+│   ├── server.js                        # Express + Socket.IO server
+│   ├── package.json
+│   └── ...
+├── public/
+├── package.json
+├── vite.config.js
+├── tailwind.config.cjs
+└── README.md (this file)
+```
+
+---
+
+## Installation & Setup
+
+### 1. Clone & Install
+```bash
+git clone <repo-url>
+cd cricsim-pro-v3
+npm install
+```
+
+### 2. Backend Setup
+```bash
+cd server
+npm install
+npm run dev
+```
+
+### 3. Frontend Setup (in another terminal)
+```bash
+npm run dev
+```
+
+### 4. Access the App
+- Open http://localhost:5173
+- Create offline auction OR join online room with code
+
+---
+
+## Development
+
+### Available Scripts
+
+**Frontend:**
+```bash
+npm run dev       # Start Vite dev server
+npm run build     # Build for production
+npm run preview   # Preview production build
+```
+
+**Backend:**
+```bash
+cd server
+npm run dev       # Start dev server with nodemon
+npm start         # Start production server
+```
+
+### Hot Module Replacement (HMR)
+Vite provides instant reload on file changes during development.
+
+### Browser DevTools
+- React DevTools recommended for component debugging
+- Network tab to monitor Socket.IO events
+
+---
+
+## IPL Auction System
+
+### How It Works
+
+1. **Initialization**
+   - Load 574 IPL players from dataset
+   - Organize into 78 auction sets by category
+   - Initialize 8 teams with ₹90 Crore purse each
+
+2. **Auction Flow**
+   - Players announced from queue (one at a time)
+   - Base price set based on player category
+   - Teams bid in real-time (multiplayer sync via Socket.IO)
+   - Timer counts down (configurable, default 30s)
+   - At 0s: Player sold to highest bidder OR marked unsold
+
+3. **Bidding Rules**
+   - Minimum bid: base price
+   - Increment: 10L for bids < 10Cr, 25L for bids < 50Cr, 50L+ above
+   - Squad: Max 25 players per team
+   - Overseas: Max 8 per team
+   - Roles: Balanced distribution
+
+4. **Completion**
+   - After all players auctioned
+   - Final squad composition displayed
+   - Remaining purse shown for each team
+
+### Configuration
+Located in `src/constants/appConstants.js`:
+```javascript
+AUCTION_CONFIG = {
+  TOTAL_PURSE: 90,           // ₹90 Crore
+  BID_TIMER: 30,             // 30 seconds per player
+  SQUAD_MAX: 25,             // Max players per squad
+  OVERSEAS_MAX: 8,           // Max overseas players
+}
+```
+
+---
+
+## Multiplayer Features
+
+### Online Auction (Socket.IO)
+
+**Create Room:**
+1. Click "Start Multiplayer Auction"
+2. System generates unique 6-digit room code
+3. Share code with other players
+
+**Join Room:**
+1. Enter room code
+2. Select your IPL team
+3. Wait for host to start auction
+4. Bidding syncs in real-time
+
+### Real-time Features
+- ✅ Live bid updates across all players
+- ✅ Synchronized timer countdown
+- ✅ Instant player queue updates
+- ✅ Auction log broadcast to all players
+- ✅ Auto-reconnection on disconnect
+
+---
+
+## Key Components
+
+### AuctionRoom.jsx
+Main auction orchestration:
+- Timer management (countdown, phase transitions)
+- Bid validation and placement
+- Queue management
+- Player sold/unsold handling
+- Confetti celebration effects
+- Socket.IO event handling
+
+### AuctionPageLayout.jsx
+Layout coordinator:
+- 3-column responsive grid
+- Left sidebar: Bid history + Auction log
+- Center: Timer + Set box + Player card + Bidding
+- Right sidebar: Teams + My Squad + Alerts
+
+### MySquadPanel.jsx
+Player squad display:
+- Classified by role (WK, Batter, All-rounder, Bowler)
+- Shows sold price and overseas status
+- Role balance statistics
+- Squad size and purse tracking
+
+### SetContextDisplay.jsx
+Current auction set information:
+- Set name and description
+- Progress bar (players auctioned / total in set)
+- Base price range
+- Expandable: Sold players, Remaining players
+
+---
+
+## UI Layout
+
+```
+┌─────────────────────────────────────────────────────┐
+│              AuctionHeader (Title + Stats)          │
+└─────────────────────────────────────────────────────┘
+┌──────────┬──────────────────────────┬───────────────┐
+│  LEFT    │      CENTER              │     RIGHT     │
+│ SIDEBAR  │  (Main Auction Area)     │    SIDEBAR    │
+│          │                          │               │
+│ Bid      │ ┌──────────────────────┐ │ Teams         │
+│ History  │ │ Timer + Set Box      │ │ Overview      │
+│          │ │ (2-column grid)      │ │               │
+│ ─────── │ └──────────────────────┘ │ My Squad      │
+│          │                          │ (By Role)     │
+│ Auction  │ ┌──────────────────────┐ │               │
+│ Log      │ │ Player Card + Bidding│ │ Admin         │
+│          │ │ (2-column grid)      │ │ Controls      │
+│          │ └──────────────────────┘ │               │
+└──────────┴──────────────────────────┴───────────────┘
+┌─────────────────────────────────────────────────────┐
+│      AuctionAnalytics (6 Stat Boxes - Footer)      │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## Deployment
+
+### Backend (Render.com)
+1. Push code to GitHub
+2. Connect Render.com to repo
+3. Set environment variables (if needed)
+4. Deploy from `server/` directory
+
+### Frontend (Vercel)
+1. Connect Vercel to GitHub repo
+2. Set build command: `npm run build`
+3. Set output directory: `dist`
+4. Deploy
+
+---
+
+## Troubleshooting
+
+### Bidding Not Syncing?
+- Check Socket.IO connection in browser DevTools
+- Verify backend server is running
+- Check CORS settings in server.js
+
+### Players Not Loading?
+- Verify `src/data/iplData.json` exists
+- Check browser console for JSON parsing errors
+- Ensure playerPoolV2.js is correctly imported
+
+### Confetti Not Working?
+- Verify `canvas-confetti` is installed: `npm install canvas-confetti`
+- Check browser console for errors
+
+### Queue Sync Issues (Multiplayer)?
+- Non-host waits for queue sync from host
+- If stuck, refresh page and rejoin room
+- Check server logs for event broadcasts
+
+---
+
+## License
+
+MIT License
+
+---
+
+**Built with ❤️ for IPL Auction Lovers** 🏏⚡
 
 ---
 

@@ -18,7 +18,6 @@ export const SOCKET_EVENTS = {
   // Navigation
   NAVIGATE_TO_QUICK_SETUP: "navigateToQuickSetup",
   NAVIGATE_TO_TOURNAMENT_SETUP: "navigateToTournamentSetup",
-  NAVIGATE_TO_AUCTION_LOBBY: "navigateToAuctionLobby",
   NAVIGATE_TO_TOURNAMENT_HUB: "navigateToTournamentHub",
   
   // Tournament
@@ -29,6 +28,16 @@ export const SOCKET_EVENTS = {
   
   // Auction
   START_AUCTION: "startAuction",
+  AUCTION_BID: "auctionBid",
+  AUCTION_PLAYER_SOLD: "auctionPlayerSold",
+  AUCTION_PLAYER_UNSOLD: "auctionPlayerUnsold",
+  AUCTION_STATE_UPDATE: "auctionStateUpdate",
+  AUCTION_TIMER_UPDATE: "auctionTimerUpdate",
+  AUCTION_NEXT_PLAYER: "auctionNextPlayer",
+  AUCTION_PASS: "auctionPass",
+  SELECT_IPL_TEAM_AUCTION: "selectIPLTeamAuction",
+  TOGGLE_PLAYER_READY: "togglePlayerReady",
+  PLAYER_READY_UPDATE: "playerReadyUpdate",
   
   // Toss & Match Start
   BROADCAST_TOSS: "broadcastToss",

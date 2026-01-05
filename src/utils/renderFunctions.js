@@ -21,7 +21,6 @@ export const RENDER_FUNCTIONS = {
   renderTournHub: 'src/pages/TournHubPage.jsx',
   renderOnlineEntry: 'src/pages/OnlineEntryPage.jsx',
   renderOnlineMenu: 'src/pages/OnlineMenuPage.jsx',
-  renderAuctionLobby: 'src/pages/AuctionLobbyPage.jsx',
 };
 
 /**

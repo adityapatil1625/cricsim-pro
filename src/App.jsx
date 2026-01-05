@@ -7,6 +7,7 @@ import TeamListItem from "./components/shared/TeamListItem";
 import TournamentBracket from "./components/tournament/TournamentBracket";
 import TournamentLeaderboards from "./components/tournament/TournamentLeaderboards";
 import AuctionRoom from "./components/auction/AuctionRoom";
+import AuctionPageLayout from "./components/auction/AuctionPageLayout";
 import useMatchEngine from "./hooks/useMatchEngine";
 import useAppState from "./hooks/useAppState";
 import { Zap, Trophy, ChevronLeft, Shuffle } from "./components/shared/Icons";
@@ -17,7 +18,6 @@ import QuickSetupPage from "./pages/QuickSetupPage";
 import TournSetupPage from "./pages/TournSetupPage";
 import TournDraftPage from "./pages/TournDraftPage";
 import TournHubPage from "./pages/TournHubPage";
-import AuctionLobbyPage from "./pages/AuctionLobbyPage";
 import OnlineEntryPage from "./pages/OnlineEntryPage";
 import OnlineMenuPage from "./pages/OnlineMenuPage";
 import MatchSummaryPage from "./pages/MatchSummaryPage";
@@ -30,25 +30,13 @@ import SOCKET_EVENTS from "./constants/socketEvents";
 import { MOCK_DB } from "./data/mockDb";
 import rawIplData from "./data/iplData.json";
 import { processIPLData } from "./data/cricketProcessing";
+import { IPL_PLAYER_POOL_V2, buildSimpleAuctionQueue, getSetById } from "./data/playerPoolV2";
 import { socket } from "./socket";
 
-// ---------- LOCAL PLAYER POOL (MOCK + IPL JSON) ----------
+// ---------- LOCAL PLAYER POOL (NEW: Comprehensive IPL Player Pool V2) ----------
 const buildLocalPool = () => {
-  const base = Array.isArray(MOCK_DB) ? [...MOCK_DB] : [];
-
-  let iplPlayers = [];
-  try {
-    if (rawIplData && typeof rawIplData === "object" && !Array.isArray(rawIplData)) {
-      const processed = processIPLData(rawIplData);
-      if (Array.isArray(processed)) {
-        iplPlayers = processed;
-      }
-    }
-  } catch (err) {
-    console.error("Failed to process IPL data in App:", err);
-  }
-
-  return buildPlayerPool(base, iplPlayers);
+  // Use the new simplified IPL player pool
+  return IPL_PLAYER_POOL_V2;
 };
 
 const LOCAL_POOL = buildLocalPool();
@@ -129,6 +117,9 @@ const App = () => {
     isHostReady, setIsHostReady,
     playersReady, setPlayersReady,
     showGuestReadyModal, setShowGuestReadyModal,
+    matchEntryReady, setMatchEntryReady,
+    pendingMatchFixture, setPendingMatchFixture,
+    currentlyPlayingMatch, setCurrentlyPlayingMatch,
   } = appState;
   
   // Ref to prevent broadcast loop when receiving tournament team updates
@@ -289,13 +280,17 @@ const App = () => {
       setView("tourn_hub");
     }
     
-    function handleNavigateToAuctionLobby() {
-      setView("auction_lobby");
-    }
-    
     function handleStartAuction() {
       console.log("🔨 Received startAuction event");
       setView("auction");
+    }
+
+    function handlePlayerReady({ socketId }) {
+      console.log(`🟢 Player ${socketId} is ready for auction`);
+      setPlayersReady(prev => ({
+        ...prev,
+        [socketId]: true
+      }));
     }
     
     function handleTournamentResultsUpdate({ fixtures: updatedFixtures, tournTeams: updatedTeams, phase }) {
@@ -305,12 +300,15 @@ const App = () => {
       console.log(`   Phase: ${phase}`);
       
       if (updatedFixtures && updatedFixtures.length > 0) {
+        console.log("✅ Setting fixtures from broadcast");
         setFixtures(updatedFixtures);
       }
       if (updatedTeams && updatedTeams.length > 0) {
+        console.log("✅ Setting tournament teams from broadcast");
         setTournTeams(updatedTeams);
       }
       if (phase) {
+        console.log("✅ Setting tournament phase from broadcast:", phase);
         setTournPhase(phase);
       }
       console.log(`✅ Tournament state updated from broadcast`);
@@ -339,28 +337,60 @@ const App = () => {
       }
     }
 
+    function handleMatchStarted({ fixtureId }) {
+      console.log(`🎬 Match started notification received: fixture ${fixtureId}`);
+      console.log(`   Is host: ${isOnlineHost}, Socket ID: ${socket.id}`);
+      setCurrentlyPlayingMatch(fixtureId);
+      
+      // Don't automatically navigate anyone - let the modal handle it
+      // The host has already navigated when they clicked START
+      // The non-host player should also be in the modal and see the match starting
+      console.log(`⏸️ Match started event received - spectators stay in hub, modal closes for participants`);
+    }
+
+    function handleBothPlayersReady({ fixtureId }) {
+      console.log(`🎬 Other player is ready! Match ${fixtureId} starting now`);
+      setCurrentlyPlayingMatch(fixtureId);
+      
+      // Navigate to match if this player is a participant
+      const fixture = fixtures.find(f => f.id === fixtureId);
+      if (fixture) {
+        const myTeamId = onlineRoom?.players?.find(p => p.socketId === socket.id)?.side;
+        const isParticipant = myTeamId === fixture.t1 || myTeamId === fixture.t2;
+        
+        if (isParticipant) {
+          console.log(`✅ Other player ready - auto-navigating to match`);
+          proceedToMatch(fixture);
+        }
+      }
+    }
+
     socket.on("navigateToQuickSetup", handleNavigateQuickSetup);
     socket.on("navigateToTournamentSetup", handleNavigateTournamentSetup);
-    socket.on("navigateToAuctionLobby", handleNavigateToAuctionLobby);
     socket.on("startAuction", handleStartAuction);
+    socket.on("playerReady", handlePlayerReady);
     socket.on("tournamentFixturesGenerated", handleTournamentFixturesGenerated);
     socket.on("tournamentStartError", handleTournamentStartError);
     socket.on("navigateToTournamentHub", handleNavigateToTournamentHub);
     socket.on("tournamentResultsUpdate", handleTournamentResultsUpdate);
     socket.on("receiveToss", handleReceiveToss);
+    socket.on("matchStarted", handleMatchStarted);
+    socket.on("bothPlayersReady", handleBothPlayersReady);
 
     return () => {
       socket.off("navigateToQuickSetup", handleNavigateQuickSetup);
       socket.off("navigateToTournamentSetup", handleNavigateTournamentSetup);
-      socket.off("navigateToAuctionLobby", handleNavigateToAuctionLobby);
       socket.off("startAuction", handleStartAuction);
+      socket.off("playerReady", handlePlayerReady);
       socket.off("tournamentFixturesGenerated", handleTournamentFixturesGenerated);
       socket.off("tournamentStartError", handleTournamentStartError);
       socket.off("navigateToTournamentHub", handleNavigateToTournamentHub);
       socket.off("tournamentResultsUpdate", handleTournamentResultsUpdate);
       socket.off("receiveToss", handleReceiveToss);
+      socket.off("matchStarted", handleMatchStarted);
+      socket.off("bothPlayersReady", handleBothPlayersReady);
     };
-  }, [onlineRoom]);
+  }, [isOnline, onlineRoom, socket, setFixtures, setTournTeams, setTournPhase]);
 
 
 
@@ -480,11 +510,9 @@ const App = () => {
   // ---------- BROADCAST matchState ON CHANGE (whoever is bowling) ----------
   useEffect(() => {
     if (!isOnline || view !== "match") {
-      console.log(`⏭️ Broadcast skipped: isOnline=${isOnline}, view=${view}`);
       return;
     }
     if (!matchState || !onlineRoom?.code) {
-      console.log(`⏭️ Broadcast skipped: no matchState or roomCode`);
       return;
     }
 
@@ -493,25 +521,19 @@ const App = () => {
     const teamASideId = matchState.teamA?.id;
     const teamBSideId = matchState.teamB?.id;
     const mySideTeamId = mySide === "A" ? teamASideId : mySide === "B" ? teamBSideId : null;
-    
-    // In online matches, BOTH teams should broadcast when their local state changes
-    // The server will relay to the other player
-    console.log(`🎯 Broadcast check - Side: ${mySide}, MyTeamId: ${mySideTeamId}, BattingTeam: ${matchState.battingTeam?.id}, Innings: ${matchState.innings}, Balls: ${matchState.ballsBowled}`);
 
     // Only broadcast if ballsBowled has actually changed from last broadcast
     if (lastBroadcastedBallsRef.current === matchState.ballsBowled && !matchState.isMatchOver) {
-      console.log(`⏭️ Skipping - same balls (${matchState.ballsBowled})`);
       return; // No change in balls, don't broadcast
     }
 
-    console.log(`📢 BROADCASTING match state - Balls: ${matchState.ballsBowled}, Innings: ${matchState.innings}, MyTeam: ${mySideTeamId}, BattingTeam: ${matchState.battingTeam?.id}`);
     lastBroadcastedBallsRef.current = matchState.ballsBowled;
     
     socket.emit("updateMatchState", {
       roomCode: onlineRoom.code,
       matchState,
     });
-  }, [matchState?.ballsBowled, matchState?.isMatchOver, matchState?.innings, matchState?.battingTeam?.id, matchState?.bowlingTeam?.id, matchState?.teamA?.id, matchState?.teamB?.id, isOnline, view, onlineRoom, socket]);
+  }, [matchState?.ballsBowled, matchState?.isMatchOver, matchState?.innings, matchState?.battingTeam?.id, matchState?.bowlingTeam?.id, matchState?.teamA?.id, matchState?.teamB?.id, isOnline, view, onlineRoom?.code]);
 
   // Reset guest ready flag when leaving online room
   useEffect(() => {
@@ -662,12 +684,25 @@ const App = () => {
       }
     }
 
+    function handleMatchEntryReady(data) {
+      console.log("📡 Received matchEntryReady event:", data);
+      if (data.roomCode === onlineRoom?.code && data.fixtureId === pendingMatchFixture?.id) {
+        console.log("🟢 Player ready for match entry:", data.socketId);
+        setMatchEntryReady(prev => ({
+          ...prev,
+          [data.socketId]: true
+        }));
+      }
+    }
+
     socket.on("playerReady", handlePlayerReady);
+    socket.on("matchEntryReady", handleMatchEntryReady);
 
     return () => {
       socket.off("playerReady", handlePlayerReady);
+      socket.off("matchEntryReady", handleMatchEntryReady);
     };
-  }, [isOnline, onlineRoom, socket]);
+  }, [isOnline, onlineRoom, socket, pendingMatchFixture]);
 
   // ---------- TEAM MANAGEMENT (LOCAL) ----------
 
@@ -979,31 +1014,61 @@ const App = () => {
       return;
     }
 
-    // Show toss animation
-    const winner = Math.random() > 0.5 ? t1 : t2;
-    setTossWinner(winner);
-    setShowToss(true);
-    
-    // Broadcast toss to guests if online
-    if (isOnline) {
-      console.log(`📢 Broadcasting tournament toss winner to guests: ${winner.name}`);
-      socket.emit("broadcastToss", {
-        roomCode: onlineRoom.code,
-        tossWinner: winner.id,
-        tossWinnerName: winner.name,
-      });
+    // For online mode, show ready screen for match participants
+    if (isOnline && onlineRoom) {
+      // Reset match entry ready states for this match
+      setMatchEntryReady({});
+      setPendingMatchFixture(fixture);
+      console.log(`⏳ Match entry ready screen shown for fixture: ${fixture.id}`);
+      return;
     }
-    
-    setTimeout(() => {
-      setShowToss(false);
+
+    // For offline mode, proceed directly to match
+    proceedToMatch(fixture);
+  };
+
+  const proceedToMatch = (fixture, isSpectating = false) => {
+    const t1 = tournTeams.find((t) => t.id === fixture.t1);
+    const t2 = tournTeams.find((t) => t.id === fixture.t2);
+
+    if (!isSpectating) {
+      // For players: show toss animation
+      const winner = Math.random() > 0.5 ? t1 : t2;
+      setTossWinner(winner);
+      setShowToss(true);
+      
+      // Broadcast toss to guests if online
+      if (isOnline) {
+        console.log(`📢 Broadcasting tournament toss winner to guests: ${winner.name}`);
+        socket.emit("broadcastToss", {
+          roomCode: onlineRoom.code,
+          tossWinner: winner.id,
+          tossWinnerName: winner.name,
+        });
+      }
+      
+      setTimeout(() => {
+        setShowToss(false);
+        startTournamentMatch(fixture.id, t1, t2, playerName);
+        setMatchTab("live");
+        setView("match");
+        setPendingMatchFixture(null);
+        setMatchEntryReady({});
+        setCurrentlyPlayingMatch(fixture.id);
+
+        if (isOnline) {
+          setIsStartingMatch(true);
+        }
+      }, 3000);
+    } else {
+      // For spectators: go directly to match view (toss already happened)
+      console.log(`👀 Spectator joining match ${fixture.id}`);
       startTournamentMatch(fixture.id, t1, t2, playerName);
       setMatchTab("live");
       setView("match");
-
-      if (isOnline && isOnlineHost) {
-        setIsStartingMatch(true);
-      }
-    }, 3000);
+      setPendingMatchFixture(null);
+      setCurrentlyPlayingMatch(fixture.id);
+    }
   };
 
   const handleEndMatch = () => {
@@ -1163,12 +1228,18 @@ const App = () => {
           // Navigate everyone to hub AFTER broadcasting results
           console.log(`📢 Broadcasting navigation to tournament hub`);
           socket.emit("navigateToTournamentHub", { code: onlineRoom.code });
+          
+          // Host navigates immediately after broadcasting
+          console.log(`✅ Host navigating to tournament hub`);
+          resetMatch();
+          setCurrentlyPlayingMatch(null);
+          setView("tourn_hub");
+        } else {
+          // Guest: wait for navigateToTournamentHub broadcast event from host
+          console.log(`⏳ Guest waiting for navigation broadcast from host`);
+          resetMatch();
+          setCurrentlyPlayingMatch(null);
         }
-        
-        // Everyone (including host) navigates immediately
-        console.log(`✅ Guest navigating to tournament hub`);
-        resetMatch();
-        setView("tourn_hub");
       } else {
         // Offline tournament
         handleTournamentMatchEnd();
@@ -1316,6 +1387,13 @@ const App = () => {
       setPlayersReady,
       showGuestReadyModal,
       setShowGuestReadyModal,
+      matchEntryReady,
+      setMatchEntryReady,
+      pendingMatchFixture,
+      setPendingMatchFixture,
+      proceedToMatch,
+      currentlyPlayingMatch,
+      setCurrentlyPlayingMatch,
       
       // Setters
       setView,
@@ -1331,24 +1409,28 @@ const App = () => {
     if (view === "tourn_hub") return <TournHubPage {...pageProps} />;
     if (view === "online_entry") return <OnlineEntryPage {...pageProps} />;
     if (view === "online_menu") return <OnlineMenuPage {...pageProps} />;
-    if (view === "auction_lobby") return <AuctionLobbyPage {...pageProps} />;
     if (view === "match_summary") return <MatchSummaryPage {...pageProps} />;
     
     if (view === "auction") {
       const auctionPlayers = isOnline 
-        ? onlineRoom?.players.filter(p => p.iplTeam).map(p => ({
-            id: p.socketId,
-            name: p.name,
-            iplTeamId: p.iplTeam,
-            iplTeam: IPL_TEAMS.find(t => t.id === p.iplTeam)
-          }))
+        ? onlineRoom?.players.filter(p => p.iplTeam).map(p => {
+            const iplTeam = IPL_TEAMS.find(t => t.id === p.iplTeam);
+            return {
+              id: p.socketId,
+              name: p.name,
+              iplTeamId: p.iplTeam,
+              iplTeam,
+              socketId: p.socketId
+            };
+          })
         : auctionTeams.map(t => {
             const iplTeam = IPL_TEAMS.find(ipl => ipl.id === t.iplTeam);
             return {
               id: t.id,
               name: t.name,
               iplTeamId: t.iplTeam,
-              iplTeam
+              iplTeam,
+              socketId: t.id
             };
           });
       
@@ -1357,9 +1439,13 @@ const App = () => {
         : socket.id;
       
       return (
-        <AuctionRoom
+        <AuctionPageLayout
           playerPool={LOCAL_POOL}
           teams={auctionPlayers}
+          soldPlayers={[]}
+          auctionPhase="running"
+          currentBid={0}
+          isOnlineHost={isOnlineHost}
           onComplete={(completedTeams) => {
             setTournTeams(completedTeams.map(t => ({
               ...t,
@@ -1374,11 +1460,12 @@ const App = () => {
             })));
             setView("tourn_hub");
           }}
-          onBack={() => setView("auction_lobby")}
+          onBack={() => setView(isOnline ? "online_menu" : "menu")}
           getTeamDisplay={getTeamDisplay}
           isOnline={isOnline}
           myTeamId={myTeamId}
           socket={socket}
+          onlineRoom={onlineRoom}
           roomCode={onlineRoom?.code}
         />
       );

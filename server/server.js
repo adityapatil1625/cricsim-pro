@@ -344,6 +344,23 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on("matchEntryReady", (data) => {
+    console.log(`🎮 Received matchEntryReady: roomCode=${data.roomCode}, fixtureId=${data.fixtureId}, socketId=${data.socketId}`);
+    const room = rooms.get(data.roomCode);
+    if (!room) {
+      console.error(`❌ Room not found for matchEntryReady: ${data.roomCode}`);
+      return;
+    }
+
+    // Broadcast to all players in the room
+    console.log(`📢 Broadcasting matchEntryReady to room ${data.roomCode}`);
+    io.to(data.roomCode).emit("matchEntryReady", {
+      roomCode: data.roomCode,
+      fixtureId: data.fixtureId,
+      socketId: data.socketId
+    });
+  });
+
   // -------- TEAM SETUP --------
 
   socket.on("updateTeamPlayers", (data, callback) => {
@@ -495,6 +512,57 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("auctionBid", (data) => {
+    try {
+      const { code, playerName, bid, teamId } = data;
+      const room = rooms.get(code);
+
+      console.log(`📥 Received auctionBid:`, { code, playerName, bid, socketId: socket.id });
+
+      if (!room) {
+        console.log(`❌ Room ${code} not found for auctionBid`);
+        return;
+      }
+
+      // Broadcast bid to all players in the room
+      const bidData = {
+        playerName,
+        bid,
+        socketId: socket.id,
+        teamId,
+        timestamp: new Date()
+      };
+      
+      console.log(`📤 Broadcasting auctionBidUpdate to room ${code}:`, bidData);
+      io.to(code).emit("auctionBidUpdate", bidData);
+
+      console.log(`💰 Bid placed in room ${code}: ${playerName} bid ₹${bid}L`);
+    } catch (error) {
+      console.error("❌ Error in auctionBid:", error);
+    }
+  });
+
+  socket.on("auctionQueueSync", (data) => {
+    try {
+      const { code, queue } = data;
+      const room = rooms.get(code);
+
+      if (!room) {
+        console.log(`❌ Room ${code} not found for auctionQueueSync`);
+        return;
+      }
+
+      // Store queue in room and broadcast to all players
+      room.auctionQueue = queue;
+      console.log(`📋 Synced auction queue for room ${code}: ${queue.length} players`);
+      
+      io.to(code).emit("auctionQueueSync", { queue });
+      console.log(`📤 Broadcasting auctionQueueSync to room ${code}`);
+    } catch (error) {
+      console.error("❌ Error in auctionQueueSync:", error);
+    }
+  });
+
   // -------- MATCH CONTROL --------
 
   socket.on("startMatch", (data, callback) => {
@@ -565,6 +633,45 @@ io.on("connection", (socket) => {
       console.log(`✅ Toss result sent to guest in room ${roomCode}`);
     } catch (error) {
       console.error("❌ Error in broadcastToss:", error);
+    }
+  });
+
+  // Broadcast match start to all players in the room
+  socket.on("matchStarted", (data) => {
+    try {
+      const { roomCode, fixtureId } = data;
+      const room = getOrCreateRoom(roomCode);
+
+      console.log(`🎬 Host broadcasting match start in room ${roomCode}: fixture ${fixtureId}`);
+
+      // Send match start info to all players in the room
+      // Client-side handler will filter: only non-host participants navigate, spectators just set the flag
+      io.to(roomCode).emit("matchStarted", {
+        fixtureId,
+      });
+
+      console.log(`✅ Match start notification broadcast to room ${roomCode}`);
+    } catch (error) {
+      console.error("❌ Error in matchStarted:", error);
+    }
+  });
+
+  // Broadcast when both players are ready
+  socket.on("bothPlayersReady", (data) => {
+    try {
+      const { roomCode, fixtureId } = data;
+      const room = getOrCreateRoom(roomCode);
+
+      console.log(`🎬 Both players ready in room ${roomCode}: fixture ${fixtureId}`);
+
+      // Broadcast to the other player so they also navigate to match
+      socket.to(roomCode).emit("bothPlayersReady", {
+        fixtureId,
+      });
+
+      console.log(`✅ Both players ready notification sent to room ${roomCode}`);
+    } catch (error) {
+      console.error("❌ Error in bothPlayersReady:", error);
     }
   });
 

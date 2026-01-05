@@ -49,12 +49,6 @@ const OnlineMenuPage = ({
 
   return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4 relative">
-        <button
-          onClick={() => setView("menu")}
-          className="absolute top-6 left-6 px-4 py-2 rounded-full border border-slate-700 text-slate-400 hover:text-white hover:border-white hover:bg-white/5 transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-2"
-        >
-          <ChevronLeft size={16} /> Back
-        </button>
         <div className="glass-panel rounded-3xl p-8 w-full max-w-4xl bg-slate-950/80 mt-12">
           <h2 className="font-broadcast text-4xl text-white mb-2">
             Room {onlineRoom.code}
@@ -200,10 +194,10 @@ const OnlineMenuPage = ({
                         alert("Need at least 2 players to start auction");
                         return;
                       }
-                      socket.emit("navigateToAuctionLobby", {
+                      socket.emit("startAuction", {
                         code: onlineRoom.code,
                       });
-                      setView("auction_lobby");
+                      setView("auction");
                     } else {
                       // For quick matches, both players must have selected IPL teams
                       const allTeamsSelected = onlineRoom.players.every(p => p.iplTeam);
@@ -238,12 +232,6 @@ const OnlineMenuPage = ({
               </p>
           )}
 
-          <button
-              onClick={() => setView("menu")}
-              className="mt-2 text-xs text-slate-500 hover:text-slate-300"
-          >
-            ← Back to Menu
-          </button>
         </div>
 
         {/* Navigation Footer */}
