@@ -21,6 +21,7 @@ import TournHubPage from "./pages/TournHubPage";
 import OnlineEntryPage from "./pages/OnlineEntryPage";
 import OnlineMenuPage from "./pages/OnlineMenuPage";
 import MatchSummaryPage from "./pages/MatchSummaryPage";
+import Footer from "./components/shared/Footer";
 
 // Import constants and utilities
 import { IPL_TEAMS, VIEW_TO_PATH, TOURNAMENT_PHASES, ONLINE_GAME_TYPES, MATCH_TABS } from "./constants/appConstants";
@@ -1534,6 +1535,9 @@ const App = () => {
           </div>
         </div>
       )}
+
+      {/* Footer */}
+      <Footer />
     </>
   );
 };
