@@ -791,18 +791,18 @@ const App = () => {
       return;
     }
 
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
-
-    const bats = shuffled.filter((p) => p.role === "Bat");
-    const alls = shuffled.filter((p) => p.role === "All");
-    const bowls = shuffled.filter((p) => p.role === "Bowl");
+    // Classify players by role
+    const wicketkeepers = pool.filter((p) => p.role === "WICKETKEEPER");
+    const batters = pool.filter((p) => p.role === "BATTER");
+    const bowlers = pool.filter((p) => p.role === "BOWLER");
 
     const usedIds = new Set();
 
     const pickFrom = (arr, count) => {
       const result = [];
-      for (let i = 0; i < arr.length && result.length < count; i++) {
-        const p = arr[i];
+      const shuffledArr = [...arr].sort(() => Math.random() - 0.5);
+      for (let i = 0; i < shuffledArr.length && result.length < count; i++) {
+        const p = shuffledArr[i];
         if (!p || usedIds.has(p.id)) continue;
         usedIds.add(p.id);
         result.push(p);
@@ -810,17 +810,32 @@ const App = () => {
       return result;
     };
 
+    // Create a properly balanced T20 XI
+    // Composition: 1 WK + 5 Batters + 5 Bowlers = 11 players
+    // (ALLROUNDER role not available, so we'll balance between batters and bowlers)
     const makeXI = () => {
       let squad = [];
-      squad = squad.concat(pickFrom(bats, 4));
-      squad = squad.concat(pickFrom(alls, 3));
-      squad = squad.concat(pickFrom(bowls, 4));
+      
+      // Pick 1 wicketkeeper
+      squad = squad.concat(pickFrom(wicketkeepers, 1));
+      
+      // Pick 5 batters (top order + middle order)
+      squad = squad.concat(pickFrom(batters, 5));
+      
+      // Pick 5 bowlers (pace and spin mix)
+      squad = squad.concat(pickFrom(bowlers, 5));
 
-      const remainingPool = shuffled.filter((p) => !usedIds.has(p.id));
-      for (let i = 0; i < remainingPool.length && squad.length < 11; i++) {
-        const p = remainingPool[i];
-        usedIds.add(p.id);
-        squad.push(p);
+      // If we still need more players, pick from remaining pool
+      if (squad.length < 11) {
+        const remainingPool = pool.filter((p) => !usedIds.has(p.id));
+        const shuffledRemaining = [...remainingPool].sort(() => Math.random() - 0.5);
+        for (let i = 0; i < shuffledRemaining.length && squad.length < 11; i++) {
+          const p = shuffledRemaining[i];
+          if (!usedIds.has(p.id)) {
+            usedIds.add(p.id);
+            squad.push(p);
+          }
+        }
       }
 
       return squad.slice(0, 11).map((p) => ({

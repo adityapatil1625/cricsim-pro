@@ -179,11 +179,7 @@ const QuickSetupPage = ({
               <p className="text-blue-300 text-sm font-semibold">👈 Select a team on the right to add players</p>
             </div>
           )}
-          {activeTeamSelect && (
-            <div className="mt-4 p-4 bg-green-900/30 border border-green-700 rounded-lg text-center">
-              <p className="text-green-300 text-sm font-semibold">✅ Team <strong>{activeTeamSelect}</strong> selected - Search and add players</p>
-            </div>
-          )}
+
         </div>
 
         <div className="w-96 flex flex-col gap-4 h-full min-h-0">
@@ -384,7 +380,7 @@ const QuickSetupPage = ({
       )}
 
       {/* Navigation Footer */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 to-slate-950/80 border-t border-slate-700/50 px-8 py-6 flex justify-between items-center gap-4 flex-wrap">
+      <div className="absolute bottom-0 left-0 right-0 z-50 bg-gradient-to-t from-slate-950 to-slate-950/80 border-t border-slate-700/50 px-8 py-6 flex justify-between items-center gap-4 flex-wrap">
         <button
           onClick={() => setView("menu")}
           className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors"
