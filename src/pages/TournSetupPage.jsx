@@ -332,123 +332,64 @@ const TournSetupPage = ({
   // Offline tournament setup (original)
   return (
     <div className="min-h-screen p-8 flex flex-col items-center justify-center relative overflow-hidden bg-slate-950">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/10 via-slate-950 to-slate-950" />
-      <div className="relative z-10 w-full max-w-3xl">
-        <h2 className="font-broadcast text-7xl text-center text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 drop-shadow-xl mb-8">
-          League Setup
-        </h2>
-        <div className="glass-panel p-1 rounded-3xl">
-          <div className="bg-slate-950/50 rounded-[20px] p-8 backdrop-blur-md">
-            <div className="flex gap-3 mb-8">
-              <input
-                  value={newTeamName}
-                  onChange={(e) => setNewTeamName(e.target.value)}
-                  className="flex-1 bg-slate-900/80 border border-slate-700 rounded-xl p-4 text-white text-lg placeholder-slate-500 focus:outline-none focus:border-brand-gold transition-all font-broadcast tracking-wide"
-                  placeholder="ENTER TEAM NAME"
-              />
-              <button
-                  onClick={addTournTeam}
-                  className="bg-gradient-to-b from-brand-gold to-yellow-600 text-black font-broadcast text-xl tracking-wider px-8 rounded-xl hover:brightness-110 transition-all"
-              >
-                ADD TEAM
-              </button>
+      {/* Animated background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-slate-950 to-pink-900/10" />
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-pulse" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-pink-600/10 rounded-full blur-3xl animate-pulse" />
+      
+      <div className="relative z-10 w-full max-w-5xl">
+        {/* Main Header */}
+        <div className="text-center mb-16">
+          <div className="mb-6 inline-block">
+            <div className="text-7xl mb-2 animate-bounce" style={{animationDelay: '0.1s'}}>🏆</div>
+          </div>
+          <h1 className="font-broadcast text-8xl text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-pink-300 to-red-300 drop-shadow-2xl mb-4">
+            TOURNAMENT
+          </h1>
+          <p className="text-slate-300 text-xl uppercase tracking-widest font-semibold mb-2">
+            Compete with Friends Worldwide
+          </p>
+          <p className="text-slate-500 text-sm">Experience the ultimate multiplayer cricket tournament</p>
+        </div>
+
+        {/* Features Grid */}
+        <div className="grid grid-cols-3 gap-4 mb-12">
+          <div className="glass-panel p-1 rounded-2xl bg-gradient-to-br from-blue-900/10 to-cyan-900/10 hover:from-blue-900/20 hover:to-cyan-900/20 transition-all">
+            <div className="bg-slate-950/60 rounded-[16px] p-6 backdrop-blur-md text-center">
+              <div className="text-4xl mb-3">👥</div>
+              <h3 className="font-broadcast text-lg text-white mb-2">Multi Teams</h3>
+              <p className="text-slate-400 text-xs">Create tournaments with multiple teams</p>
             </div>
-            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-              {tournTeams.map((t, i) => (
-                  <div
-                      key={t.id}
-                      className="bg-slate-900/60 p-4 rounded-xl flex justify-between items-center border border-white/5"
-                  >
-                    <div className="flex items-center gap-4">
-                      <span className="text-slate-600 font-broadcast text-2xl w-8">
-                        {(i + 1).toString().padStart(2, "0")}
-                      </span>
-                      {(() => {
-                        const display = getTeamDisplay(t);
-                        return display.logo && (
-                          <img src={display.logo} alt={display.shortName} className="w-6 h-6 object-contain" />
-                        );
-                      })()}
-                      <span className="font-bold text-xl text-slate-200">
-                        {getTeamDisplay(t).name}
-                      </span>
-                    </div>
-                    <span className="text-xs font-bold bg-slate-800 text-slate-400 px-3 py-1 rounded-full border border-slate-700">
-                      {t.players.length} / 11
-                    </span>
-                  </div>
-              ))}
+          </div>
+
+          <div className="glass-panel p-1 rounded-2xl bg-gradient-to-br from-green-900/10 to-emerald-900/10 hover:from-green-900/20 hover:to-emerald-900/20 transition-all">
+            <div className="bg-slate-950/60 rounded-[16px] p-6 backdrop-blur-md text-center">
+              <div className="text-4xl mb-3">🌍</div>
+              <h3 className="font-broadcast text-lg text-white mb-2">Live Matches</h3>
+              <p className="text-slate-400 text-xs">Play real-time matches with live updates</p>
+            </div>
+          </div>
+
+          <div className="glass-panel p-1 rounded-2xl bg-gradient-to-br from-amber-900/10 to-orange-900/10 hover:from-amber-900/20 hover:to-orange-900/20 transition-all">
+            <div className="bg-slate-950/60 rounded-[16px] p-6 backdrop-blur-md text-center">
+              <div className="text-4xl mb-3">📊</div>
+              <h3 className="font-broadcast text-lg text-white mb-2">Statistics</h3>
+              <p className="text-slate-400 text-xs">Track detailed tournament leaderboards</p>
             </div>
           </div>
         </div>
 
-        <div className="flex justify-between mt-8 items-center">
-          <button
-              onClick={() => setView("menu")}
-              className="text-slate-400 hover:text-white px-6 py-2 transition-colors uppercase tracking-widest text-xs font-bold flex items-center gap-2"
-          >
-            <ChevronLeft size={16} /> Back to Menu
-          </button>
-
-          <div className="flex gap-3 items-center">
-            {isOnline ? (
-                <div className="px-4 py-2 rounded-full bg-slate-900 border border-sky-600 text-sky-300 text-xs font-bold uppercase tracking-widest">
-                  Room {onlineRoom?.code} • {isOnlineHost ? "HOST" : "GUEST"}
-                </div>
-            ) : (
-                <button
-                    onClick={() => {
-                      setOnlineGameType("tournament");
-                      setOnlineRoom(null);
-                      setJoinCode("");
-                      setJoinError("");
-                      setView("online_entry");
-                    }}
-                    className="px-6 py-3 rounded-full border border-sky-600 text-sky-300 hover:bg-sky-900/40 transition-all font-bold text-xs uppercase tracking-widest"
-                >
-                  Play Tournament with Friends
-                </button>
-            )}
-
-            <button
-                disabled={tournTeams.length < 3}
-                onClick={() => {
-                  setActiveTeamSelect(tournTeams[0] ? tournTeams[0].id : null);
-                  setView("tourn_draft");
-                }}
-                className={`px-12 py-4 rounded-full font-broadcast text-2xl tracking-wide transition-all shadow-2xl ${
-                    tournTeams.length < 3
-                        ? "bg-slate-800 text-slate-600 cursor-not-allowed"
-                        : "bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:scale-105"
-                }`}
-            >
-              ENTER DRAFT
-            </button>
-          </div>
-        </div>
-
-        {/* Navigation Footer */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 to-slate-950/80 border-t border-slate-700/50 px-8 py-6 flex justify-between items-center gap-4 flex-wrap">
-          <button
-            onClick={() => setView("menu")}
-            disabled={isOnline && onlineRoom?.players?.length < 2}
-            className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title={isOnline && onlineRoom?.players?.length < 2 ? "Cannot navigate during online play" : ""}
-          >
-            ← Back to Menu
-          </button>
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                setActiveTeamSelect("A");
-                setView("quick_setup");
-              }}
-              disabled={isOnline && onlineRoom?.players?.length < 2}
-              className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title={isOnline && onlineRoom?.players?.length < 2 ? "Cannot navigate during online play" : ""}
-            >
-              ⚡ Quick Play
-            </button>
+        {/* Main CTA Card */}
+        <div className="mb-12 glass-panel p-1 rounded-3xl bg-gradient-to-br from-purple-900/30 to-pink-900/30 border-2 border-purple-500/40 hover:border-purple-500/60 transition-all">
+          <div className="bg-gradient-to-br from-slate-950/80 to-slate-900/60 rounded-[20px] p-12 backdrop-blur-md">
+            <div className="flex items-center gap-6 mb-8">
+              <div className="text-6xl">🎮</div>
+              <div>
+                <h2 className="font-broadcast text-5xl text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-pink-300 mb-2">Online Tournament</h2>
+                <p className="text-slate-300 text-lg">Create a new room or join existing tournaments with your friends</p>
+              </div>
+            </div>
+            
             <button
               onClick={() => {
                 setOnlineGameType("tournament");
@@ -457,27 +398,52 @@ const TournSetupPage = ({
                 setJoinError("");
                 setView("online_entry");
               }}
-              disabled={isOnline && onlineRoom?.players?.length < 2}
-              className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title={isOnline && onlineRoom?.players?.length < 2 ? "Cannot navigate during online play" : ""}
+              className="w-full px-8 py-5 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:from-purple-500 hover:via-pink-500 hover:to-red-500 text-white font-broadcast text-2xl tracking-widest transition-all shadow-2xl shadow-purple-900/60 hover:shadow-purple-900/80 hover:scale-105 transform active:scale-95 duration-200"
             >
-              🌐 Online
-            </button>
-            <button
-              onClick={() => {
-                setOnlineGameType("auction");
-                setOnlineRoom(null);
-                setJoinCode("");
-                setJoinError("");
-                setView("online_entry");
-              }}
-              disabled={isOnline && onlineRoom?.players?.length < 2}
-              className="px-6 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title={isOnline && onlineRoom?.players?.length < 2 ? "Cannot navigate during online play" : ""}
-            >
-              🔨 Auction
+              ⚔️ START TOURNAMENT NOW
             </button>
           </div>
+        </div>
+
+        {/* How It Works Section */}
+        <div className="mb-12 glass-panel p-1 rounded-2xl bg-gradient-to-r from-slate-900/20 to-slate-800/20">
+          <div className="bg-slate-950/60 rounded-[16px] p-8 backdrop-blur-md">
+            <h3 className="font-broadcast text-3xl text-white mb-6 flex items-center gap-2">
+              <span className="text-2xl">⚙️</span> How It Works
+            </h3>
+            <div className="grid grid-cols-4 gap-4">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-purple-600/20 rounded-full flex items-center justify-center mx-auto mb-3 font-broadcast text-xl text-purple-300">1</div>
+                <p className="text-slate-300 text-sm font-semibold">Create Room</p>
+                <p className="text-slate-500 text-xs mt-1">Or join existing</p>
+              </div>
+              <div className="text-center">
+                <div className="w-12 h-12 bg-pink-600/20 rounded-full flex items-center justify-center mx-auto mb-3 font-broadcast text-xl text-pink-300">2</div>
+                <p className="text-slate-300 text-sm font-semibold">Build Teams</p>
+                <p className="text-slate-500 text-xs mt-1">Select your XI</p>
+              </div>
+              <div className="text-center">
+                <div className="w-12 h-12 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-3 font-broadcast text-xl text-red-300">3</div>
+                <p className="text-slate-300 text-sm font-semibold">Play Matches</p>
+                <p className="text-slate-500 text-xs mt-1">Real-time games</p>
+              </div>
+              <div className="text-center">
+                <div className="w-12 h-12 bg-amber-600/20 rounded-full flex items-center justify-center mx-auto mb-3 font-broadcast text-xl text-amber-300">4</div>
+                <p className="text-slate-300 text-sm font-semibold">Win Trophy</p>
+                <p className="text-slate-500 text-xs mt-1">Claim victory</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Navigation */}
+        <div className="flex justify-center gap-4">
+          <button
+            onClick={() => setView("menu")}
+            className="px-8 py-3 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-all hover:shadow-lg"
+          >
+            ← Back to Menu
+          </button>
         </div>
       </div>
     </div>
