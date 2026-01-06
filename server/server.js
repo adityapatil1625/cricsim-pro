@@ -563,6 +563,109 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("auctionPlayerSold", (data) => {
+    try {
+      const { code, player, teamId, price } = data;
+      const room = rooms.get(code);
+
+      if (!room) {
+        console.log(`❌ Room ${code} not found for auctionPlayerSold`);
+        return;
+      }
+
+      console.log(`📥 Received auctionPlayerSold:`, { code, playerName: player?.name, teamId, price });
+      
+      // Broadcast sold player to all players in the room
+      const soldData = {
+        player,
+        teamId,
+        price,
+        timestamp: new Date()
+      };
+      
+      console.log(`📤 Broadcasting auctionPlayerSold to room ${code}:`, { playerName: player?.name, teamId, price });
+      io.to(code).emit("auctionPlayerSold", soldData);
+    } catch (error) {
+      console.error("❌ Error in auctionPlayerSold:", error);
+    }
+  });
+
+  socket.on("auctionPlayerUnsold", (data) => {
+    try {
+      const { code, player } = data;
+      const room = rooms.get(code);
+
+      if (!room) {
+        console.log(`❌ Room ${code} not found for auctionPlayerUnsold`);
+        return;
+      }
+
+      console.log(`📥 Received auctionPlayerUnsold:`, { code, playerName: player?.name });
+      
+      // Broadcast unsold player to all players in the room
+      const unsoldData = {
+        player,
+        timestamp: new Date()
+      };
+      
+      console.log(`📤 Broadcasting auctionPlayerUnsold to room ${code}:`, { playerName: player?.name });
+      io.to(code).emit("auctionPlayerUnsold", unsoldData);
+    } catch (error) {
+      console.error("❌ Error in auctionPlayerUnsold:", error);
+    }
+  });
+
+  socket.on("auctionTimerUpdate", (data) => {
+    try {
+      const { code, timer, playerName } = data;
+      const room = rooms.get(code);
+
+      if (!room) {
+        console.log(`❌ Room ${code} not found for auctionTimerUpdate`);
+        return;
+      }
+
+      console.log(`📥 Received auctionTimerUpdate:`, { code, timer, playerName });
+      
+      // Broadcast timer update to all players in the room (except sender)
+      const timerData = {
+        timer,
+        playerName,
+        timestamp: new Date()
+      };
+      
+      // Broadcast to all except the host who sent it
+      socket.broadcast.to(code).emit("auctionTimerUpdate", timerData);
+    } catch (error) {
+      console.error("❌ Error in auctionTimerUpdate:", error);
+    }
+  });
+
+  socket.on("auctionNextPlayer", (data) => {
+    try {
+      const { code, player } = data;
+      const room = rooms.get(code);
+
+      if (!room) {
+        console.log(`❌ Room ${code} not found for auctionNextPlayer`);
+        return;
+      }
+
+      console.log(`📥 Received auctionNextPlayer:`, { code, playerName: player?.name });
+      
+      // Broadcast next player announcement to all players in the room (except sender/host)
+      const nextPlayerData = {
+        player,
+        timestamp: new Date()
+      };
+      
+      console.log(`📤 Broadcasting auctionNextPlayer to room ${code}:`, { playerName: player?.name });
+      socket.broadcast.to(code).emit("auctionNextPlayer", nextPlayerData);
+    } catch (error) {
+      console.error("❌ Error in auctionNextPlayer:", error);
+    }
+  });
+
   // -------- MATCH CONTROL --------
 
   socket.on("startMatch", (data, callback) => {

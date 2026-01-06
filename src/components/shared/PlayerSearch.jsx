@@ -5,7 +5,7 @@ import { MOCK_DB } from "../../data/mockDb";
 import rawIplData from "../../data/iplData.json";
 import { processIPLData } from "../../data/cricketProcessing";
 
-const API_BASE = "http://localhost:4000"; // your Express backend
+const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
 
 const PlayerSearch = ({ activeTeam, onAddPlayer }) => {
     const [localPlayers, setLocalPlayers] = useState([]);
