@@ -242,6 +242,56 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Get list of available rooms filtered by mode
+  socket.on("getRooms", (data, callback) => {
+    try {
+      const { mode } = data || {};
+      const availableRooms = [];
+
+      rooms.forEach((room, code) => {
+        // Only show rooms that are not full and not yet live
+        const maxPlayers = room.mode === "tournament" ? 10 : 2;
+        const isFull = room.players.length >= maxPlayers;
+        
+        if (!room.isLive && !isFull) {
+          // Filter by mode if specified
+          if (mode && room.mode !== mode) {
+            return;
+          }
+
+          const host = room.players.find(p => p.socketId === room.host);
+          availableRooms.push({
+            code: room.code,
+            mode: room.mode,
+            hostName: host?.name || "Unknown",
+            playerCount: room.players.length,
+            maxPlayers: maxPlayers,
+            createdAt: room.createdAt,
+          });
+        }
+      });
+
+      // Sort by creation date (newest first)
+      availableRooms.sort((a, b) => b.createdAt - a.createdAt);
+
+      if (callback) {
+        callback({
+          success: true,
+          rooms: availableRooms,
+        });
+      }
+    } catch (error) {
+      console.error("❌ Error in getRooms:", error);
+      if (callback) {
+        callback({
+          success: false,
+          error: error.message,
+          rooms: [],
+        });
+      }
+    }
+  });
+
   socket.on("navigateToQuickSetup", (data) => {
     try {
       const { code } = data;

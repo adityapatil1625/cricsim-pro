@@ -37,6 +37,8 @@ export const useAppState = () => {
   
   // Online/multiplayer state
   const [onlineRoom, setOnlineRoom] = useState(null);
+  const [availableRooms, setAvailableRooms] = useState([]);
+  const [loadingRooms, setLoadingRooms] = useState(false);
   const [playerName, setPlayerName] = useState("");
   const [onlineName, setOnlineName] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -99,6 +101,10 @@ export const useAppState = () => {
     // Online
     onlineRoom,
     setOnlineRoom,
+    availableRooms,
+    setAvailableRooms,
+    loadingRooms,
+    setLoadingRooms,
     playerName,
     setPlayerName,
     onlineName,

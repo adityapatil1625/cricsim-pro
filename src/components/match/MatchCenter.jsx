@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import StatsDashboard from "./StatsDashboard";
+import CricketFacts from "../shared/CricketFacts";
 import stadiumImg from "../../pictures/stadium.jpg";
 import {
     Tv,
@@ -31,12 +32,50 @@ const MatchCenter = ({
                          tournPhase = null,
                          setView = null,
                      }) => {
+    const [playbackSpeed, setPlaybackSpeed] = useState(1); // 0.5x, 1x, 1.5x, 2x
     const commentaryEndRef = useRef(null);
     const recentBallsRef = useRef(null);
     const isBowlingRef = useRef(false);
     const location = useLocation();
     const navigate = useNavigate();
     const lastUrlRef = useRef(null);
+    const autoBowlIntervalRef = useRef(null);
+
+    // Guard against null matchState
+    if (!matchState) {
+        return <div className="min-h-screen bg-slate-950 flex items-center justify-center">Loading match...</div>;
+    }
+
+    // Early computation of endOfInnings for use in effects
+    const batTeam = matchState.battingTeam;
+    const bowlTeam = matchState.bowlingTeam;
+    const isAllOut =
+        matchState.wickets >= batTeam.players.length - 1 ||
+        batTeam.players.length === 0;
+    const endOfInnings =
+        matchState.innings === 1 &&
+        (matchState.ballsBowled >= matchState.totalOvers * 6 || isAllOut);
+
+    // Auto-bowling effect for playback speeds > 1x
+    useEffect(() => {
+        if (playbackSpeed > 1 && !matchState?.isMatchOver && !endOfInnings && (isOnline ? canControl : true)) {
+            // Calculate interval based on speed: at 2x speed, bowl twice as fast (half the interval)
+            const baseInterval = 500; // 500ms base interval for 1x
+            const interval = baseInterval / playbackSpeed;
+            
+            autoBowlIntervalRef.current = setInterval(() => {
+                if (!isBowlingRef.current && (isOnline ? canControl : true)) {
+                    bowlBall();
+                }
+            }, interval);
+
+            return () => {
+                if (autoBowlIntervalRef.current) {
+                    clearInterval(autoBowlIntervalRef.current);
+                }
+            };
+        }
+    }, [playbackSpeed, matchState?.isMatchOver, endOfInnings, bowlBall, isOnline, canControl]);
 
     // Sync activeTab with URL query parameter - only when URL changes
     useEffect(() => {
@@ -73,8 +112,9 @@ const MatchCenter = ({
     }
 
     useEffect(() => {
-        if (commentaryEndRef.current) {
-            commentaryEndRef.current.scrollIntoView({ behavior: "smooth" });
+        if (commentaryEndRef.current && commentaryEndRef.current.parentElement) {
+            // Scroll only within the commentary container, not the entire page
+            commentaryEndRef.current.parentElement.scrollTop = commentaryEndRef.current.parentElement.scrollHeight;
         }
     }, [matchState?.commentary]);
 
@@ -94,9 +134,6 @@ const MatchCenter = ({
     if (!matchState?.battingTeam || !matchState?.bowlingTeam) {
         return null;
     }
-
-    const batTeam = matchState.battingTeam;
-    const bowlTeam = matchState.bowlingTeam;
 
     const getMatchPlayer = (id) => {
         if (!id) return null;
@@ -138,13 +175,6 @@ const MatchCenter = ({
         "." +
         (matchState.ballsBowled % 6);
 
-    const isAllOut =
-        matchState.wickets >= batTeam.players.length - 1 ||
-        batTeam.players.length === 0;
-    const endOfInnings =
-        matchState.innings === 1 &&
-        (matchState.ballsBowled >= matchState.totalOvers * 6 || isAllOut);
-
     const totalOversBowled = matchState.ballsBowled / 6;
     const currentRR =
         totalOversBowled > 0 ? matchState.score / totalOversBowled : null;
@@ -178,111 +208,132 @@ const MatchCenter = ({
         if (activeTab === "live") {
             return (
                 <div className="flex-1 flex flex-col gap-4 h-full p-4">
-                    <div className="flex-1 flex items-center justify-center">
-                        <div
-                            className={
-                                "relative rounded-3xl overflow-hidden border border-slate-700 shadow-2xl w-full max-w-4xl aspect-video bg-black " +
-                                (isBigMoment ? "camera-shake" : "")
-                            }
-                        >
-                            {/* Stadium background */}
+                    {/* Main Display with Facts Sidebar */}
+                    <div className="flex-1 flex gap-4 min-h-0">
+                        {/* Stadium view */}
+                        <div className="flex-1 flex items-center justify-center">
                             <div
-                                className="absolute inset-0"
+                                className={
+                                    "relative rounded-2xl overflow-hidden shadow-xl w-full max-w-4xl aspect-video bg-black " +
+                                    (isBigMoment ? "camera-shake" : "")
+                                }
                                 style={{
                                     backgroundImage: `url(${stadiumImg})`,
                                     backgroundSize: "cover",
                                     backgroundPosition: "center",
                                 }}
-                            />
-                            {/* Dark overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/50" />
+                            >
+                                {/* Sophisticated dark overlay */}
+                                <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/50 to-black/90" />
 
-                            {/* Big moment overlay text (images handled by engine via eventOverlay.img if you wire it) */}
-                            {matchState.eventOverlay && (
-                                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm event-overlay-zoom">
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-                                    <div className="event-overlay-flash" />
-                                    <h1 className="absolute bottom-10 left-0 right-0 text-center font-broadcast text-[70px] md:text-[110px] text-brand-gold tracking-widest event-overlay-text-pop drop-shadow-[0_0_40px_rgba(250,204,21,0.9)]">
-                                        {matchState.eventOverlay.text}
-                                    </h1>
-                                </div>
-                            )}
-
-                            {/* Overlay UI */}
-                            <div className="absolute inset-0 flex flex-col justify-between p-8 md:p-12">
-                                {/* Non-striker card */}
-                                <div className="flex justify-center">
-                                    <div className="glass-card p-3 rounded-xl flex items-center gap-3 min-w-[180px] bg-slate-900/80 border border-slate-600">
-                                        <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold text-slate-400 border border-slate-500 text-xs">
-                                            {nonStriker?.name
-                                                ?.split(" ")
-                                                .map((n) => n[0])
-                                                .join("")
-                                                .slice(0, 2)
-                                                .toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase">
-                                                Non-Striker
-                                            </div>
-                                            <div className="font-broadcast text-lg truncate max-w-[140px] text-slate-200">
-                                                {nonStriker?.name}
-                                            </div>
-                                            <div className="font-mono text-brand-gold text-xs">
-                                                {nsStats.runs}{" "}
-                                                <span className="text-slate-500">
-                          ({nsStats.balls})
-                        </span>
-                                            </div>
+                                {/* Event overlay - minimal and elegant */}
+                                {matchState.eventOverlay && (
+                                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80">
+                                        <div className="text-center">
+                                            <h1 className="font-broadcast text-[120px] text-white tracking-widest drop-shadow-[0_0_30px_rgba(0,0,0,0.8)] mb-4">
+                                                {matchState.eventOverlay.text}
+                                            </h1>
+                                            <div className="h-1 w-32 bg-brand-gold mx-auto" />
                                         </div>
                                     </div>
-                                </div>
+                                )}
 
-                                {/* Striker + bowler */}
-                                <div className="flex justify-between items-end gap-4">
-                                    {/* Striker */}
-                                    <div className="glass-card p-4 rounded-xl flex items-center gap-3 min-w-[220px] border-l-4 border-green-500 bg-slate-900/90 shadow-xl">
-                                        <div className="w-12 h-12 rounded-full bg-green-900/30 border-2 border-green-500 flex items-center justify-center font-broadcast text-xl text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.3)]">
-                                            {striker?.name
-                                                ?.split(" ")
-                                                .map((n) => n[0])
-                                                .join("")
-                                                .slice(0, 2)
-                                                .toUpperCase()}
+                                {/* Clean Vertical Layout - No Overlap */}
+                                <div className="absolute inset-0 flex flex-col gap-3 p-3 overflow-hidden">
+                                    {/* Score Bar - Compact */}
+                                    <div className="flex justify-around items-center bg-black/40 backdrop-blur rounded-lg p-2 flex-shrink-0">
+                                        <div className="text-center">
+                                            <div className="text-[8px] text-slate-400 font-bold">OVER</div>
+                                            <div className="font-broadcast text-3xl text-white">{Math.floor(matchState.ballsBowled / 6)}.{matchState.ballsBowled % 6}</div>
                                         </div>
-                                        <div className="min-w-0 flex-1">
-                                            <div className="text-[10px] text-green-400 font-bold uppercase animate-pulse mb-0.5">
-                                                On Strike
+                                        <div className="h-12 w-px bg-slate-600/30" />
+                                        <div className="text-center flex-1">
+                                            <div className="text-[8px] text-slate-400 font-bold">SCORE</div>
+                                            <div className="flex justify-center items-baseline gap-1">
+                                                <div className="font-broadcast text-5xl text-white leading-none">{matchState.score}</div>
+                                                <div className="text-lg text-red-400 font-bold">/{matchState.wickets}</div>
                                             </div>
-                                            <div className="font-broadcast text-2xl truncate max-w-[150px] leading-none mb-0.5">
-                                                {striker?.name}
-                                            </div>
-                                            <div className="font-mono text-lg text-brand-gold">
-                                                {sStats.runs}{" "}
-                                                <span className="text-slate-500 text-sm">
-                          ({sStats.balls})
-                        </span>
-                                            </div>
+                                        </div>
+                                        <div className="h-12 w-px bg-slate-600/30" />
+                                        <div className="text-center">
+                                            <div className="text-[8px] text-slate-400 font-bold">OVERS</div>
+                                            <div className="font-broadcast text-3xl text-white">{matchState.totalOvers - Math.floor(matchState.ballsBowled / 6)}</div>
                                         </div>
                                     </div>
 
-                                    {/* Bowler */}
-                                    <div className="glass-card p-3 rounded-xl text-right min-w-[160px] bg-slate-900/80 border border-slate-600">
-                                        <div className="text-[10px] text-slate-400 font-bold uppercase">
-                                            Bowler
+                                    {/* Main Content - Two Columns Side by Side */}
+                                    <div className="flex gap-2 flex-1 min-h-0">
+                                        {/* Batsman Card */}
+                                        <div className="flex-1 bg-blue-900/30 backdrop-blur border border-blue-500/30 rounded-lg p-2 flex flex-col items-center justify-start overflow-hidden">
+                                            <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-broadcast text-lg shadow-lg mb-1 flex-shrink-0">
+                                                {striker?.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                                            </div>
+                                            <div className="text-center mb-2 flex-shrink-0">
+                                                <div className="font-broadcast text-sm text-white leading-tight truncate w-24">{striker?.name}</div>
+                                                <div className="text-[6px] text-blue-300 font-bold">BATSMAN</div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-1 w-full flex-shrink-0">
+                                                <div className="bg-blue-950/60 p-1 rounded text-center">
+                                                    <div className="text-[6px] text-blue-300 font-bold">R</div>
+                                                    <div className="font-broadcast text-lg text-brand-gold leading-none">{sStats.runs}</div>
+                                                </div>
+                                                <div className="bg-blue-950/60 p-1 rounded text-center">
+                                                    <div className="text-[6px] text-blue-300 font-bold">B</div>
+                                                    <div className="font-broadcast text-lg text-white leading-none">{sStats.balls}</div>
+                                                </div>
+                                                <div className="bg-blue-950/60 p-1 rounded text-center">
+                                                    <div className="text-[6px] text-blue-300 font-bold">4s</div>
+                                                    <div className="font-broadcast text-base text-cyan-400 leading-none">{sStats.fours}</div>
+                                                </div>
+                                                <div className="bg-blue-950/60 p-1 rounded text-center">
+                                                    <div className="text-[6px] text-blue-300 font-bold">6s</div>
+                                                    <div className="font-broadcast text-base text-brand-gold leading-none">{sStats.sixes}</div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="font-broadcast text-xl truncate max-w-[150px] text-slate-200">
-                                            {bowler?.name}
+
+                                        {/* Bowler Card */}
+                                        <div className="flex-1 bg-red-900/30 backdrop-blur border border-red-500/30 rounded-lg p-2 flex flex-col items-center justify-start overflow-hidden">
+                                            <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white font-broadcast text-lg shadow-lg mb-1 flex-shrink-0">
+                                                {bowler?.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                                            </div>
+                                            <div className="text-center mb-2 flex-shrink-0">
+                                                <div className="font-broadcast text-sm text-white leading-tight truncate w-24">{bowler?.name}</div>
+                                                <div className="text-[6px] text-red-300 font-bold">BOWLER</div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-1 w-full flex-shrink-0">
+                                                <div className="bg-red-950/60 p-1 rounded text-center">
+                                                    <div className="text-[6px] text-red-300 font-bold">O</div>
+                                                    <div className="font-mono text-lg text-white leading-none">{Math.floor(bStats.balls / 6)}.{bStats.balls % 6}</div>
+                                                </div>
+                                                <div className="bg-red-950/60 p-1 rounded text-center">
+                                                    <div className="text-[6px] text-red-300 font-bold">R</div>
+                                                    <div className="font-broadcast text-lg text-brand-gold leading-none">{bStats.runs}</div>
+                                                </div>
+                                                <div className="bg-red-950/60 p-1 rounded text-center">
+                                                    <div className="text-[6px] text-red-300 font-bold">W</div>
+                                                    <div className="font-broadcast text-base text-red-400 leading-none">{bStats.wickets}</div>
+                                                </div>
+                                                <div className="bg-red-950/60 p-1 rounded text-center">
+                                                    <div className="text-[6px] text-red-300 font-bold">E</div>
+                                                    <div className="font-mono text-base text-orange-400 leading-none">{bStats.balls > 0 ? (bStats.runs / (bStats.balls / 6)).toFixed(2) : "0"}</div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="font-mono text-xs text-slate-400 mt-0.5">
-                                            {Math.floor(bStats.balls / 6)}.{bStats.balls % 6} ov •{" "}
-                                            <span className="text-white font-bold">
-                        {bStats.wickets}-{bStats.runs}
-                      </span>
-                                        </div>
+                                    </div>
+
+                                    {/* Non-Striker Footer */}
+                                    <div className="bg-black/40 backdrop-blur rounded-lg p-2 text-center flex-shrink-0">
+                                        <div className="text-[7px] text-slate-400 font-bold mb-1">NON-STRIKER</div>
+                                        <div className="font-broadcast text-sm text-white truncate">{nonStriker?.name}</div>
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Right Sidebar: Cricket Facts */}
+                        <div className="w-80 flex flex-col gap-3 h-full min-h-0 overflow-y-auto custom-scrollbar">
+                            <CricketFacts autoRotate={true} rotateInterval={15000} />
                         </div>
                     </div>
                 </div>
@@ -998,6 +1049,30 @@ const MatchCenter = ({
 
                         {/* Controls */}
                         <div className="flex-shrink-0 space-y-2">
+                            {/* Playback Speed Controls */}
+                            <div className="glass-panel p-3 rounded-lg">
+                                <div className="text-xs text-slate-500 uppercase font-bold mb-2 tracking-widest">
+                                    Playback Speed
+                                </div>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[0.5, 1, 1.5, 2].map((speed) => (
+                                        <button
+                                            key={speed}
+                                            onClick={() => setPlaybackSpeed(speed)}
+                                            className={`py-2 px-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                                                playbackSpeed === speed
+                                                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
+                                                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                                            }`}
+                                        >
+                                            {speed}x
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="text-xs text-slate-500 mt-2 text-center">
+                                    Current: <span className="text-slate-300 font-semibold">{playbackSpeed}x</span>
+                                </div>
+                            </div>
                             {!matchState.isMatchOver ? (
                                 !endOfInnings ? (
                                     <>

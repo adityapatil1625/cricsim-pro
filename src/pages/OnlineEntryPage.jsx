@@ -12,11 +12,16 @@
  * - onlineGameType: Current game type (quick, tournament, auction)
  * - setView: Function to change current view
  * - socket: Socket.IO instance
+ * - availableRooms: Array of available rooms
+ * - setAvailableRooms: Setter for available rooms
+ * - loadingRooms: Boolean for loading state
+ * - setLoadingRooms: Setter for loading state
  * - ChevronLeft: Icon component
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ChevronLeft } from '../components/shared/Icons';
+import RoomsList from '../components/shared/RoomsList';
 import { capitalizeFirstLetter } from '../utils/appUtils';
 
 const OnlineEntryPage = ({
@@ -29,101 +34,169 @@ const OnlineEntryPage = ({
   onlineGameType,
   setView,
   socket,
+  availableRooms,
+  setAvailableRooms,
+  loadingRooms,
+  setLoadingRooms,
 }) => {
+  // Fetch available rooms when component mounts or game type changes
+  useEffect(() => {
+    const fetchRooms = () => {
+      if (!socket) return;
+      
+      setLoadingRooms(true);
+      
+      const modeMap = {
+        "quick": "1v1",
+        "tournament": "tournament",
+        "auction": "auction"
+      };
+      
+      const mode = modeMap[onlineGameType] || null;
+      
+      socket.emit("getRooms", { mode }, (response) => {
+        setLoadingRooms(false);
+        if (response.success) {
+          setAvailableRooms(response.rooms || []);
+        }
+      });
+    };
+
+    fetchRooms();
+
+    // Refresh rooms every 5 seconds
+    const interval = setInterval(fetchRooms, 5000);
+    return () => clearInterval(interval);
+  }, [socket, onlineGameType, setAvailableRooms, setLoadingRooms]);
+
+  const handleJoinRoomFromList = (roomCode) => {
+    if (!onlineName.trim()) {
+      alert("Please enter your name first.");
+      return;
+    }
+
+    setJoinCode(roomCode);
+    
+    socket.emit("joinRoom", {
+      code: roomCode.trim(),
+      name: onlineName.trim(),
+    });
+
+    setView("online_menu");
+  };
   return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4 relative">
-        <div className="glass-panel rounded-3xl p-8 w-full max-w-md bg-slate-950/80">
-          <h2 className="font-broadcast text-4xl text-white mb-2">
-            Play with Friends
-          </h2>
+        <div className="w-full max-w-5xl">
+          
+          {/* Header and Name Section */}
+          <div className="mb-6 text-center">
+            <h2 className="font-broadcast text-5xl text-white mb-4">
+              Play with Friends
+            </h2>
 
-          <p className="text-xs text-slate-400 mb-4 uppercase tracking-widest">
-            {onlineGameType === "tournament"
-                ? "Tournament Mode"
-                : onlineGameType === "auction"
-                ? "Auction Mode"
-                : "1v1 Quick Match"}
-          </p>
+            <p className="text-xs text-slate-400 mb-6 uppercase tracking-widest">
+              {onlineGameType === "tournament"
+                  ? "🏆 Tournament Mode"
+                  : onlineGameType === "auction"
+                  ? "🔨 Auction Mode"
+                  : "⚡ 1v1 Quick Match"}
+            </p>
 
-          {/* Name */}
-          <div className="mb-4">
-            <label className="block text-xs text-slate-400 mb-1">
-              Your Name
-            </label>
-            <input
-                value={onlineName}
-                onChange={(e) => setOnlineName(capitalizeFirstLetter(e.target.value))}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-gold"
-                placeholder="Enter your name"
-            />
+            {/* Name Input - Page Level */}
+            <div className="w-full max-w-md mx-auto mb-8">
+              <input
+                  value={onlineName}
+                  onChange={(e) => setOnlineName(capitalizeFirstLetter(e.target.value))}
+                  className="w-full bg-slate-900 border-2 border-slate-700 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-gold placeholder-slate-500 text-center"
+                  placeholder="Enter your name to continue..."
+              />
+              <p className="text-xs text-slate-500 mt-2">Your name will be displayed to other players</p>
+            </div>
           </div>
 
-          {/* Join existing room */}
-          <div className="mb-6">
-            <label className="block text-xs text-slate-400 mb-1">
-              Join Room (optional)
-            </label>
-            <input
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white tracking-[0.3em] text-center focus:outline-none focus:border-sky-500"
-                placeholder="CODE"
-            />
-            {joinError && (
-                <p className="mt-1 text-[11px] text-red-400">{joinError}</p>
-            )}
-          </div>
+          {/* Two Column Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Left side - Create/Join with Code */}
+            <div className="glass-panel rounded-3xl p-8 bg-slate-950/80 h-fit">
+              <h3 className="text-xl font-bold text-white mb-4">Create or Join</h3>
 
-          {/* Buttons */}
-          <div className="space-y-3">
-            {/* Host Room */}
-            <button
-                onClick={() => {
-                  if (!onlineName.trim()) {
-                    alert("Please enter your name first.");
-                    return;
-                  }
+              {/* Join with Code */}
+              <div className="mb-6">
+                <label className="block text-xs text-slate-400 mb-2 uppercase tracking-wider">
+                  Join with Room Code
+                </label>
+                <input
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white tracking-[0.3em] text-center focus:outline-none focus:border-sky-500"
+                    placeholder="CODE"
+                />
+                {joinError && (
+                    <p className="mt-1 text-[11px] text-red-400">{joinError}</p>
+                )}
+              </div>
 
-                  // Create room on server
-                                    socket.emit("createRoom", {
-                                      name: onlineName.trim(),
-                                      mode: onlineGameType === "quick" ? "1v1" : onlineGameType,
-                                    });
-                  // We rely on roomUpdate to actually move us into the room,
-                  // but as a fallback we can optimistically go there:
-                  setView("online_menu");
-                }}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg py-2 text-sm font-bold uppercase tracking-widest"
-            >
-              Host Room
-            </button>
+              {/* Buttons */}
+              <div className="space-y-3">
+                {/* Host Room */}
+                <button
+                    onClick={() => {
+                      if (!onlineName.trim()) {
+                        alert("Please enter your name first.");
+                        return;
+                      }
 
-            {/* Join Room */}
-            <button
-                onClick={() => {
-                  if (!onlineName.trim()) {
-                    alert("Please enter your name first.");
-                    return;
-                  }
-                  if (!joinCode.trim()) {
-                    alert("Enter a room code to join.");
-                    return;
-                  }
+                      // Create room on server
+                      socket.emit("createRoom", {
+                        name: onlineName.trim(),
+                        mode: onlineGameType === "quick" ? "1v1" : onlineGameType,
+                      });
+                      setView("online_menu");
+                    }}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg py-2 text-sm font-bold uppercase tracking-widest transition-colors"
+                >
+                  🎮 Host Room
+                </button>
 
-                  socket.emit("joinRoom", {
-                    code: joinCode.trim(),
-                    name: onlineName.trim(),
-                  });
+                {/* Join Room with Code */}
+                <button
+                    onClick={() => {
+                      if (!onlineName.trim()) {
+                        alert("Please enter your name first.");
+                        return;
+                      }
+                      if (!joinCode.trim()) {
+                        alert("Enter a room code to join.");
+                        return;
+                      }
 
-                  // temporary view change; roomUpdate will also set view
-                  setView("online_menu");
-                }}
-                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-lg py-2 text-sm font-bold uppercase tracking-widest border border-slate-600"
-            >
-              Join Room
-            </button>
+                      socket.emit("joinRoom", {
+                        code: joinCode.trim(),
+                        name: onlineName.trim(),
+                      });
+
+                      setView("online_menu");
+                    }}
+                    className="w-full bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg py-2 text-sm font-bold uppercase tracking-widest border border-slate-600 transition-colors"
+                >
+                  ✏️ Join with Code
+                </button>
+              </div>
+            </div>
+
+            {/* Right side - Available Rooms List */}
+            <div>
+              <RoomsList 
+                rooms={availableRooms} 
+                gameType={onlineGameType}
+                onRoomSelect={handleJoinRoomFromList}
+                isLoading={loadingRooms}
+              />
+            </div>
           </div>
         </div>
+
 
         {/* Navigation Footer */}
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 to-slate-950/80 border-t border-slate-700/50 px-8 py-6 flex justify-between items-center gap-4 flex-wrap">
