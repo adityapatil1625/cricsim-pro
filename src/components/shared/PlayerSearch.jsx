@@ -11,6 +11,7 @@ const PlayerSearch = ({ activeTeam, onAddPlayer }) => {
     const [localPlayers, setLocalPlayers] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState([]);
+    const [selectedRole, setSelectedRole] = useState("all"); // Track role filter
 
     const [remoteStatus, setRemoteStatus] = useState("idle"); // idle | loading | ok | blocked | error
     const [remoteMessage, setRemoteMessage] = useState("");
@@ -321,81 +322,184 @@ const PlayerSearch = ({ activeTeam, onAddPlayer }) => {
         <div className="h-full flex flex-col glass-panel rounded-3xl p-1 overflow-hidden">
             <div className="flex flex-col h-full bg-slate-950/40 rounded-[20px] overflow-hidden">
                 {/* Header */}
-                <div className="p-6 border-b border-white/5 flex justify-between items-center flex-shrink-0">
-                    <div>
-                        <h3 className="font-broadcast text-4xl text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
-                            Auction Pool
-                        </h3>
-                        <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest mt-1">
-                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                            Local + Live Search • {totalPlayers} Base Players
-                            {activeTeam && (
-                                <span className="ml-3 text-[10px] text-slate-500">
-                  Active team:{" "}
-                                    <span className="text-slate-300 font-semibold">
-                    {activeTeam}
-                  </span>
-                </span>
-                            )}
-                            {renderApiStatus()}
-                        </div>
-                        {remoteMessage && (
-                            <div className="text-[10px] text-slate-500 mt-1">
-                                {remoteMessage}
+                <div className="p-6 border-b border-white/5 flex-shrink-0">
+                    <div className="flex justify-between items-start mb-6">
+                        <div>
+                            <h3 className="font-broadcast text-4xl text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
+                                Auction Pool
+                            </h3>
+                            <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest mt-1">
+                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                Local + Live Search • {totalPlayers} Base Players
+                                {activeTeam && (
+                                    <span className="ml-3 text-[10px] text-slate-500">
+                      Active team:{" "}
+                                        <span className="text-slate-300 font-semibold">
+                        {activeTeam}
+                      </span>
+                    </span>
+                                )}
+                                {renderApiStatus()}
                             </div>
-                        )}
+                            {remoteMessage && (
+                                <div className="text-[10px] text-slate-500 mt-1">
+                                    {remoteMessage}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3">
+                            {/* Search box */}
+                            <div className="relative group">
+                                <Search
+                                    className="absolute left-4 top-3.5 text-slate-500 group-focus-within:text-brand-gold transition-colors"
+                                    size={18}
+                                />
+                                <input
+                                    className="bg-black/30 border border-white/10 rounded-full py-3 pl-12 pr-6 text-sm w-64 text-white focus:outline-none focus:border-brand-gold transition-all placeholder-slate-600"
+                                    placeholder="Search Player..."
+                                    value={searchQuery}
+                                    onChange={(e) =>
+                                        setSearchQuery(e.target.value)
+                                    }
+                                />
+                            </div>
+
+                            {/* JSON import */}
+                            <input
+                                type="file"
+                                accept=".json"
+                                ref={fileInputRef}
+                                className="hidden"
+                                onChange={handleJsonImport}
+                            />
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="bg-slate-800 hover:bg-slate-700 text-brand-gold px-6 rounded-full border border-slate-700 hover:border-brand-gold/30 transition-all text-xs font-bold uppercase tracking-wider"
+                            >
+                                Import JSON
+                            </button>
+                        </div>
                     </div>
 
-                    <div className="flex gap-3">
-                        {/* Search box */}
-                        <div className="relative group">
-                            <Search
-                                className="absolute left-4 top-3.5 text-slate-500 group-focus-within:text-brand-gold transition-colors"
-                                size={18}
-                            />
-                            <input
-                                className="bg-black/30 border border-white/10 rounded-full py-3 pl-12 pr-6 text-sm w-64 text-white focus:outline-none focus:border-brand-gold transition-all placeholder-slate-600"
-                                placeholder="Search Player..."
-                                value={searchQuery}
-                                onChange={(e) =>
-                                    setSearchQuery(e.target.value)
-                                }
-                            />
-                        </div>
-
-                        {/* JSON import */}
-                        <input
-                            type="file"
-                            accept=".json"
-                            ref={fileInputRef}
-                            className="hidden"
-                            onChange={handleJsonImport}
-                        />
+                    {/* Role Filter Tabs */}
+                    <div className="flex gap-2">
                         <button
-                            onClick={() => fileInputRef.current?.click()}
-                            className="bg-slate-800 hover:bg-slate-700 text-brand-gold px-6 rounded-full border border-slate-700 hover:border-brand-gold/30 transition-all text-xs font-bold uppercase tracking-wider"
+                            onClick={() => setSelectedRole("all")}
+                            className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
+                                selectedRole === "all"
+                                    ? "bg-brand-gold/20 text-brand-gold border border-brand-gold/50"
+                                    : "bg-slate-800/50 text-slate-400 hover:bg-slate-700/50 border border-slate-700"
+                            }`}
                         >
-                            Import JSON
+                            All Players
+                        </button>
+                        <button
+                            onClick={() => setSelectedRole("batter")}
+                            className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
+                                selectedRole === "batter"
+                                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/50"
+                                    : "bg-slate-800/50 text-slate-400 hover:bg-slate-700/50 border border-slate-700"
+                            }`}
+                        >
+                            🏏 Batters
+                        </button>
+                        <button
+                            onClick={() => setSelectedRole("bowler")}
+                            className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
+                                selectedRole === "bowler"
+                                    ? "bg-red-500/20 text-red-400 border border-red-500/50"
+                                    : "bg-slate-800/50 text-slate-400 hover:bg-slate-700/50 border border-slate-700"
+                            }`}
+                        >
+                            🎳 Bowlers
+                        </button>
+                        <button
+                            onClick={() => setSelectedRole("allrounder")}
+                            className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
+                                selectedRole === "allrounder"
+                                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/50"
+                                    : "bg-slate-800/50 text-slate-400 hover:bg-slate-700/50 border border-slate-700"
+                            }`}
+                        >
+                            ⚡ All-Rounders
                         </button>
                     </div>
                 </div>
 
                 {/* Player list - this scrolls */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
-                    <div className="p-6 grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
                         {resultsToShow.length === 0 ? (
-                            <div className="col-span-full text-slate-500 text-sm italic">
+                            <div className="text-slate-500 text-xs md:text-sm italic">
                                 No players match the search. Try a different name
                                 or import more data.
                             </div>
                         ) : (
-                            resultsToShow.map((p) => (
-                                <PlayerCard
-                                    key={p.id}
-                                    player={p}
-                                    onAdd={handleAddClick}
-                                />
-                            ))
+                            (() => {
+                              // Group players by role
+                              const batters = resultsToShow.filter(p => p.role === 'BATTER' || p.role === 'Bat' || p.role === 'batter');
+                              const bowlers = resultsToShow.filter(p => p.role === 'BOWLER' || p.role === 'Bowl' || p.role === 'bowler');
+                              const allrounders = resultsToShow.filter(p => p.role === 'ALLROUNDER' || p.role === 'All' || p.role === 'allrounder');
+                              const others = resultsToShow.filter(p => 
+                                p.role !== 'BATTER' && p.role !== 'Bat' && p.role !== 'batter' &&
+                                p.role !== 'BOWLER' && p.role !== 'Bowl' && p.role !== 'bowler' &&
+                                p.role !== 'ALLROUNDER' && p.role !== 'All' && p.role !== 'allrounder'
+                              );
+
+                              // Filter based on selected role
+                              let playersToDisplay = [];
+                              if (selectedRole === "all") {
+                                playersToDisplay = resultsToShow;
+                              } else if (selectedRole === "batter") {
+                                playersToDisplay = batters;
+                              } else if (selectedRole === "bowler") {
+                                playersToDisplay = bowlers;
+                              } else if (selectedRole === "allrounder") {
+                                playersToDisplay = allrounders;
+                              }
+
+                              const renderSection = (title, emoji, players) => {
+                                if (players.length === 0) return null;
+                                return (
+                                  <div key={title}>
+                                    <div className="sticky top-0 bg-slate-950/80 backdrop-blur-sm py-2 md:py-3 mb-3 md:mb-4 border-b border-white/5">
+                                      <h4 className="font-broadcast text-sm md:text-lg text-brand-gold flex items-center gap-2">
+                                        <span>{emoji}</span> {title}
+                                        <span className="text-xs text-slate-500 font-normal ml-auto">{players.length} players</span>
+                                      </h4>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2 gap-2 md:gap-4">
+                                      {players.map((p) => (
+                                        <PlayerCard
+                                          key={p.id}
+                                          player={p}
+                                          onAdd={handleAddClick}
+                                        />
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              };
+
+                              // Show sections based on selected role
+                              if (selectedRole === "all") {
+                                return (
+                                  <>
+                                    {renderSection('Batters', '🏏', batters)}
+                                    {renderSection('Bowlers', '🎳', bowlers)}
+                                    {renderSection('All-Rounders', '⚡', allrounders)}
+                                    {renderSection('Others', '👥', others)}
+                                  </>
+                                );
+                              } else if (selectedRole === "batter") {
+                                return renderSection('Batters', '🏏', batters);
+                              } else if (selectedRole === "bowler") {
+                                return renderSection('Bowlers', '🎳', bowlers);
+                              } else if (selectedRole === "allrounder") {
+                                return renderSection('All-Rounders', '⚡', allrounders);
+                              }
+                            })()
                         )}
                     </div>
                 </div>

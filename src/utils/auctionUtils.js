@@ -1,6 +1,7 @@
 /**
  * auctionUtils.js
- * Utility functions for auction system
+ * Consolidated auction utility functions for auction system
+ * Includes: config, bid calculations, team validation, squad management, logging
  */
 
 // Auction configuration constants
@@ -13,6 +14,63 @@ export const AUCTION_CONFIG = {
   INITIAL_TIMER: 10,
   BID_TIMER: 10,
   SOLD_TIMER: 3,
+};
+
+// ===== AUCTION SET DEFINITIONS (from auctionSets.js) =====
+export const AUCTION_SETS = {
+  MARQUEE: {
+    id: 'MARQUEE',
+    name: 'Marquee Players',
+    emoji: '👑',
+    description: 'Stars, captains, MVPs, international icons',
+    basePriceRange: { min: 150, max: 200 },
+    maxAllowed: 200,
+    order: 1,
+  },
+  CAPPED_INDIAN: {
+    id: 'CAPPED_INDIAN',
+    name: 'Capped Indian Players',
+    emoji: '🇮🇳',
+    description: 'Represented India internationally, role-based',
+    basePriceRange: { min: 50, max: 100 },
+    maxAllowed: 100,
+    order: 2,
+  },
+  OVERSEAS: {
+    id: 'OVERSEAS',
+    name: 'Overseas Players',
+    emoji: '🌍',
+    description: 'International capped players',
+    basePriceRange: { min: 50, max: 200 },
+    maxAllowed: 200,
+    order: 3,
+  },
+  UNCAPPED_INDIAN: {
+    id: 'UNCAPPED_INDIAN',
+    name: 'Uncapped Indian Players',
+    emoji: '🔓',
+    description: 'Domestic talents, IPL debutants, U-19 stars',
+    basePriceRange: { min: 20, max: 40 },
+    maxAllowed: 40,
+    order: 4,
+  },
+  ACCELERATED: {
+    id: 'ACCELERATED',
+    name: 'Accelerated Round',
+    emoji: '⚡',
+    description: 'Unsold players, fast-tracked bidding',
+    basePriceRange: { min: 20, max: 200 },
+    maxAllowed: 200,
+    order: 5,
+  },
+};
+
+// Player roles (from auctionEnhanced.js)
+export const PLAYER_ROLES = {
+  BATTER: 'batter',
+  BOWLER: 'bowler',
+  ALLROUNDER: 'allrounder',
+  WICKETKEEPER: 'wicketkeeper',
 };
 
 /**
@@ -255,4 +313,57 @@ export const getTeamPurseInfo = (team) => {
  */
 export const canStartAuction = (teams, minimumTeams = 2) => {
   return teams && teams.length >= minimumTeams;
+};
+
+// ===== TEAM VALIDATION (from auctionEnhanced.js) =====
+
+/**
+ * Validate team composition (overseas limit, roles, etc.)
+ */
+export const validateTeamComposition = (squad, config = {}) => {
+  const {
+    maxPlayers = 25,
+    minPlayers = 18,
+    maxOverseas = 8,
+  } = config;
+  
+  const issues = [];
+  
+  if (squad.length < minPlayers) {
+    issues.push(`Need at least ${minPlayers} players (have ${squad.length})`);
+  }
+  
+  if (squad.length > maxPlayers) {
+    issues.push(`Cannot exceed ${maxPlayers} players (have ${squad.length})`);
+  }
+  
+  const overseasCount = squad.filter(p => p.isOverseas).length;
+  if (overseasCount > maxOverseas) {
+    issues.push(`Too many overseas players (${overseasCount}/${maxOverseas})`);
+  }
+  
+  // Optional role balance check
+  const roleBalance = getTeamRoleBalance(squad);
+  
+  return {
+    isValid: issues.length === 0,
+    issues,
+    stats: {
+      totalPlayers: squad.length,
+      overseasCount,
+      roleBalance,
+    },
+  };
+};
+
+/**
+ * Get team role composition breakdown
+ */
+export const getTeamRoleBalance = (squad) => {
+  return {
+    batters: squad.filter(p => p.role === PLAYER_ROLES.BATTER).length,
+    bowlers: squad.filter(p => p.role === PLAYER_ROLES.BOWLER).length,
+    allrounders: squad.filter(p => p.role === PLAYER_ROLES.ALLROUNDER).length,
+    wicketkeepers: squad.filter(p => p.role === PLAYER_ROLES.WICKETKEEPER).length,
+  };
 };

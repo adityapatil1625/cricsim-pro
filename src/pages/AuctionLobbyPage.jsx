@@ -62,11 +62,11 @@ const AuctionLobbyPage = ({
   const players = isOnline ? onlineRoom?.players || [] : auctionTeams;
   
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 relative overflow-hidden p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 relative overflow-hidden p-4 md:p-6 lg:p-8">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/20 via-slate-950 to-slate-950" />
       
-      <div className="relative z-10 glass-panel rounded-3xl p-8 w-full max-w-4xl bg-slate-950/80">
-        <h2 className="font-broadcast text-5xl text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-brand-gold mb-2">
+      <div className="relative z-10 glass-panel rounded-2xl md:rounded-3xl p-4 md:p-6 lg:p-8 w-full max-w-4xl bg-slate-950/80">
+        <h2 className="font-broadcast text-3xl md:text-5xl text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-brand-gold mb-2">
           Auction Lobby
         </h2>
         <p className="text-xs text-slate-400 mb-6 uppercase tracking-widest">
@@ -76,7 +76,7 @@ const AuctionLobbyPage = ({
         {/* Team Selection Grid */}
         <div className="mb-6">
           <h3 className="text-sm text-slate-300 mb-3">Choose Your Franchise</h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 max-h-96 overflow-y-auto custom-scrollbar p-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-3 max-h-96 overflow-y-auto custom-scrollbar p-2">
             {IPL_TEAMS.map(team => {
               const taken = players.find(p => p.iplTeam === team.id);
               const isMine = isOnline ? taken?.socketId === socket.id : taken?.id === socket.id;

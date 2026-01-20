@@ -28,7 +28,6 @@ import { IPL_TEAMS, VIEW_TO_PATH, TOURNAMENT_PHASES, ONLINE_GAME_TYPES, MATCH_TA
 import { generateId, getTeamDisplay, buildPlayerPool } from "./utils/appUtils";
 import SOCKET_EVENTS from "./constants/socketEvents";
 
-import { MOCK_DB } from "./data/mockDb";
 import rawIplData from "./data/iplData.json";
 import { processIPLData } from "./data/cricketProcessing";
 import { IPL_PLAYER_POOL_V2, buildSimpleAuctionQueue, getSetById } from "./data/playerPoolV2";
@@ -177,6 +176,20 @@ const App = () => {
 
       // convenience: keep joinCode in sync with room code
       if (!joinCode) setJoinCode(room.code);
+      
+      // Initialize playersReady tracking for all players in room
+      if (room?.players && room.players.length > 0) {
+        console.log(`📊 Initializing playersReady for ${room.players.length} players`);
+        const initialReady = {};
+        room.players.forEach(p => {
+          initialReady[p.socketId] = false; // Start all as not ready
+        });
+        // Don't override existing ready states - only add missing players
+        setPlayersReady(prev => ({
+          ...prev,
+          ...initialReady
+        }));
+      }
     }
 
     socket.on("roomUpdate", handleRoomUpdate);
@@ -558,14 +571,22 @@ const App = () => {
         teamB,
       });
 
-      // ✅ Auto-mark guest as ready when they have 11 players selected (only once)
+      // ✅ Auto-mark guest as ready when they have 11 players selected
       const mySide = onlineRoom?.players?.find((p) => p.socketId === socket.id)?.side;
       const myTeam = mySide === "A" ? teamA : teamB;
       const playerCount = myTeam?.players?.length || 0;
       
       console.log(`📊 Player status - Side: ${mySide}, Players: ${playerCount}/11, Ready flag: ${guestMarkedReady.current}, IsHost: ${isOnlineHost}`);
       
-      // ✅ AUTO-MARK READY FOR BOTH HOST AND GUEST when they have 11 players
+      // Reset flag if player count drops below 11
+      if (playerCount < 11) {
+        if (guestMarkedReady.current) {
+          console.log(`🔄 Resetting ready flag - team now has ${playerCount}/11 players`);
+          guestMarkedReady.current = false;
+        }
+      }
+      
+      // ✅ AUTO-MARK READY FOR BOTH HOST AND GUEST when they have exactly 11 players
       if (!guestMarkedReady.current && playerCount === 11) {
         console.log(`✅ Auto-marking ready with 11 players (${isOnlineHost ? "HOST" : "GUEST"})`);
         guestMarkedReady.current = true; // Set flag to prevent duplicate calls
@@ -576,6 +597,19 @@ const App = () => {
         }, (response) => {
           console.log("✅ updateTeamPlayers callback received:", response);
         });
+        
+        // ✅ Update local playersReady state immediately for this player
+        setPlayersReady(prev => ({
+          ...prev,
+          [socket.id]: true
+        }));
+        
+        // ✅ Also emit playerReady to mark this player as ready
+        socket.emit("playerReady", { 
+          roomCode: onlineRoom.code, 
+          socketId: socket.id 
+        });
+        console.log(`📢 Emitted playerReady for ${isOnlineHost ? "HOST" : "GUEST"}`);
       }
     } else if (view === "tourn_setup") {
       // Only broadcast the current player's own team for tournament setup

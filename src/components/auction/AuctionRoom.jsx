@@ -23,7 +23,7 @@ import {
   ChevronLeft,
 } from '../shared/Icons';
 import { buildSimpleAuctionQueue, getSetById, getBidIncrement, formatPrice } from '../../data/playerPoolV2';
-import { validateTeamComposition, getTeamRoleBalance } from '../../utils/auctionEnhanced';
+import { validateTeamComposition, getTeamRoleBalance } from '../../utils/auctionUtils';
 import SetContextDisplay from './SetContextDisplay';
 
 // Auction configuration constants

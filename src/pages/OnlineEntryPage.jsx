@@ -85,12 +85,12 @@ const OnlineEntryPage = ({
     setView("online_menu");
   };
   return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4 relative">
-        <div className="w-full max-w-5xl">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4 md:p-6 lg:p-8 relative">
+        <div className="w-full max-w-5xl px-2 md:px-0">
           
           {/* Header and Name Section */}
           <div className="mb-6 text-center">
-            <h2 className="font-broadcast text-5xl text-white mb-4">
+            <h2 className="font-broadcast text-3xl md:text-5xl text-white mb-4">
               Play with Friends
             </h2>
 

@@ -85,11 +85,11 @@ const TournSetupPage = ({
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/10 via-slate-950 to-slate-950" />
           
           {/* Header */}
-          <div className="relative z-10 w-full px-8 py-6 flex-shrink-0">
-            <h2 className="font-broadcast text-5xl text-center text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 drop-shadow-xl">
+          <div className="relative z-10 w-full px-4 md:px-8 py-4 md:py-6 flex-shrink-0">
+            <h2 className="font-broadcast text-3xl md:text-5xl text-center text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 drop-shadow-xl">
               Build Your Team
             </h2>
-            <div className="flex items-center justify-center gap-2 mt-2">
+            <div className="flex items-center justify-center gap-2 mt-2 flex-wrap px-2">
               {(() => {
                 const myTeamData = isOnline 
                   ? tournTeams.find(t => t.id === mySide) || { id: mySide, name: `Team ${mySide}` }
@@ -98,9 +98,9 @@ const TournSetupPage = ({
                 return (
                   <>
                     {display.logo && (
-                      <img src={display.logo} alt={display.shortName} className="w-6 h-6 object-contain" />
+                      <img src={display.logo} alt={display.shortName} className="w-5 md:w-6 h-5 md:h-6 object-contain flex-shrink-0" />
                     )}
-                    <p className="text-center text-slate-400">{display.name} - Select 11 players</p>
+                    <p className="text-center text-slate-400 text-xs md:text-base">{display.name} - Select 11 players</p>
                   </>
                 );
               })()}
@@ -108,18 +108,18 @@ const TournSetupPage = ({
           </div>
 
           {/* Main Content */}
-          <div className="relative z-10 flex-1 flex px-8 gap-6 min-h-0 overflow-hidden pb-6">
+          <div className="relative z-10 flex-1 flex flex-col lg:flex-row px-4 md:px-8 gap-4 md:gap-6 min-h-0 overflow-hidden pb-4 md:pb-6">
             {/* Player Pool */}
-            <div className="flex-1 flex flex-col min-h-0 h-full">
+            <div className="flex-1 flex flex-col min-h-0 h-full min-w-0">
               <PlayerSearch activeTeam={mySide} onAddPlayer={handleAddToActiveTeam} />
             </div>
 
             {/* My Team */}
-            <div className="w-96 flex flex-col min-h-0">
+            <div className="w-full lg:w-96 flex flex-col min-h-0 max-h-[50vh] lg:max-h-none">
               <div className="glass-panel p-1 rounded-3xl flex-1 flex flex-col min-h-0">
-                <div className="bg-slate-950/50 rounded-[20px] p-6 backdrop-blur-md flex-1 flex flex-col min-h-0">
-                  <div className="flex justify-between items-center mb-4 flex-shrink-0">
-                    <h3 className="font-broadcast text-2xl text-white">YOUR TEAM</h3>
+                <div className="bg-slate-950/50 rounded-[20px] p-4 md:p-6 backdrop-blur-md flex-1 flex flex-col min-h-0">
+                  <div className="flex justify-between items-center mb-4 gap-2 flex-shrink-0 flex-wrap">
+                    <h3 className="font-broadcast text-lg md:text-2xl text-white">YOUR TEAM</h3>
                     <div className="flex items-center gap-2">
                       {myTeam?.players.length < 11 && (
                           <button
@@ -307,7 +307,7 @@ const TournSetupPage = ({
                     <div className="bg-blue-900/40 border border-blue-500 text-blue-300 px-8 py-3 rounded-full font-broadcast text-lg text-center">
                       ✓ YOU'RE READY!
                     </div>
-                  ) : (
+                  ) : (myTeam?.players?.length === 11) ? (
                     <button
                       onClick={() => {
                         setPlayersReady(prev => ({
@@ -321,6 +321,10 @@ const TournSetupPage = ({
                     >
                       ✓ MARK AS READY
                     </button>
+                  ) : (
+                    <div className="bg-slate-800 text-slate-500 px-8 py-3 rounded-full font-broadcast text-lg text-center">
+                      Select 11 players to continue
+                    </div>
                   )
               )}
             </div>

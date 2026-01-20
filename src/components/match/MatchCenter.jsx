@@ -562,24 +562,24 @@ const MatchCenter = ({
         <div className="min-h-screen w-full flex flex-col bg-slate-950 relative overflow-hidden">
             {/* ✅ INNINGS BREAK OVERLAY */}
             {endOfInnings && !matchState.isMatchOver && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md">
-                    <div className="text-center space-y-8 animate-fade-in">
-                        <div className="text-brand-gold text-8xl font-broadcast animate-pulse">
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
+                    <div className="text-center space-y-4 md:space-y-8 animate-fade-in max-w-2xl">
+                        <div className="text-brand-gold text-5xl md:text-8xl font-broadcast animate-pulse">
                             INNINGS BREAK
                         </div>
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-center gap-3">
+                        <div className="space-y-2 md:space-y-4">
+                            <div className="flex items-center justify-center gap-2 md:gap-3 flex-wrap">
                                 {getTeamDisplay && getTeamDisplay(batTeam).logo && (
-                                    <img src={getTeamDisplay(batTeam).logo} alt={getTeamDisplay(batTeam).shortName} className="w-12 h-12 object-contain" />
+                                    <img src={getTeamDisplay(batTeam).logo} alt={getTeamDisplay(batTeam).shortName} className="w-8 md:w-12 h-8 md:h-12 object-contain" />
                                 )}
-                                <div className="text-white text-4xl font-broadcast">
+                                <div className="text-white text-2xl md:text-4xl font-broadcast">
                                     {getTeamDisplay ? getTeamDisplay(batTeam).name : batTeam.name}: {matchState.score}/{matchState.wickets}
                                 </div>
                             </div>
-                            <div className="text-slate-400 text-2xl">
+                            <div className="text-slate-400 text-lg md:text-2xl">
                                 ({oversStr} overs)
                             </div>
-                            <div className="text-emerald-400 text-3xl font-bold mt-6">
+                            <div className="text-emerald-400 text-xl md:text-3xl font-bold mt-4 md:mt-6">
                                 Target: {matchState.score + 1} runs
                             </div>
                         </div>
@@ -590,7 +590,7 @@ const MatchCenter = ({
                                 console.log("🏏 Start 2nd Innings clicked");
                                 handleInningsBreakWithBroadcast();
                             }}
-                            className="mt-12 px-16 py-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-broadcast text-3xl rounded-2xl shadow-2xl transition-all active:scale-95 animate-pulse"
+                            className="mt-6 md:mt-12 px-8 md:px-16 py-3 md:py-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-broadcast text-lg md:text-3xl rounded-lg md:rounded-2xl shadow-2xl transition-all active:scale-95 animate-pulse"
                         >
                             START 2ND INNINGS
                         </button>
