@@ -1,7 +1,11 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { Zap, Trophy } from "../components/shared/Icons";
+import authService from "../services/authService";
 
 const MenuPage = ({ setActiveTeamSelect, setView, setOnlineGameType, setOnlineRoom, setJoinCode, setJoinError }) => {
+  const user = authService.getCurrentUser();
+
   return (
     <div className="min-h-screen relative overflow-hidden flex flex-col items-center justify-center bg-slate-950">
       {/* Background gradients */}
@@ -10,6 +14,19 @@ const MenuPage = ({ setActiveTeamSelect, setView, setOnlineGameType, setOnlineRo
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-green-900/5 rounded-full blur-[100px]" />
 
       <div className="relative z-10 w-full flex flex-col items-center justify-center px-3 sm:px-6 py-8 sm:py-12">
+        {/* Top Right User Button */}
+        {user && (
+          <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20">
+            <Link
+              to="/profile"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-300 hover:text-white hover:border-brand-gold/50 hover:bg-slate-800/80 transition"
+            >
+              <span className="text-sm font-medium">{user.displayName || user.email}</span>
+              <span className="text-lg">👤</span>
+            </Link>
+          </div>
+        )}
+
         {/* Header Section - Reduced Size */}
         <div className="text-center space-y-2 sm:space-y-3 mb-8 sm:mb-12">
           <div className="flex justify-center mb-1 sm:mb-2">

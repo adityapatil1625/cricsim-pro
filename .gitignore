@@ -5,13 +5,7 @@ server/node_modules/
 # Environment variables
 .env
 .env.local
-server/.env
-
-# Build outputs
-dist/
-build/
-
-# Logs
+.env.firebase
 *.log
 npm-debug.log*
 
