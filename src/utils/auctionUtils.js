@@ -86,7 +86,11 @@ export const getBidIncrement = (currentBid) => {
 };
 
 /**
- * Get next available bid amount
+ * Calculate next available bid amount based on current bid
+ * @param {number} currentBid - The current highest bid amount (₹ lakh)
+ * @param {number} [count=1] - Number of increments to add
+ * @returns {number} Next bid amount
+ * @example getNextBid(50) // returns 60 (50 + 10 increment)
  */
 export const getNextBid = (currentBid, count = 1) => {
   const increment = getBidIncrement(currentBid);
@@ -94,7 +98,14 @@ export const getNextBid = (currentBid, count = 1) => {
 };
 
 /**
- * Generate available bids for a team
+ * Generate array of available bid options for a team
+ * @param {number} currentBid - Current highest bid amount
+ * @param {Object} team - Team object with purse and squad
+ * @param {number} team.purse - Remaining purse balance (₹ crore)
+ * @param {Array} team.squad - Current squad array
+ * @param {number} [squadMax=25] - Maximum squad size allowed
+ * @returns {number[]} Array of valid bid amounts team can place
+ * @example generateAvailableBids(50, { purse: 30, squad: [] }) // [60, 70, 80, 90, 100]
  */
 export const generateAvailableBids = (currentBid, team, squadMax = AUCTION_CONFIG.SQUAD_MAX) => {
   const increment = getBidIncrement(currentBid);
@@ -113,7 +124,14 @@ export const generateAvailableBids = (currentBid, team, squadMax = AUCTION_CONFI
 };
 
 /**
- * Validate if a team can bid an amount
+ * Validate if a team can place a bid
+ * @param {Object} team - Team object to validate
+ * @param {number} team.purse - Remaining purse balance
+ * @param {Array} team.squad - Current squad array
+ * @param {number} bidAmount - Bid amount to check (₹ lakh)
+ * @param {number} [squadMax=25] - Maximum squad size
+ * @returns {boolean} True if team can bid, false otherwise
+ * @description Checks purse balance, squad size, and minimum purse requirements
  */
 export const canTeamBid = (team, bidAmount, squadMax = AUCTION_CONFIG.SQUAD_MAX) => {
   if (!team) return false;
@@ -133,7 +151,12 @@ export const canTeamBid = (team, bidAmount, squadMax = AUCTION_CONFIG.SQUAD_MAX)
 };
 
 /**
- * Process a sold player
+ * Process a sold player and update team's squad and purse
+ * @param {Object} player - Player object that was sold
+ * @param {Object} team - Team that won the player
+ * @param {number} price - Final sold price (₹ lakh)
+ * @param {Array} auctionTeams - Array of all auction teams
+ * @returns {Array} Updated teams array with player added and purse deducted
  */
 export const processSoldPlayer = (player, team, price, auctionTeams) => {
   return auctionTeams.map(t => {
@@ -149,7 +172,9 @@ export const processSoldPlayer = (player, team, price, auctionTeams) => {
 };
 
 /**
- * Initialize auction teams with default values
+ * Initialize auction teams with default purse and empty squads
+ * @param {Array} teams - Array of team objects to initialize
+ * @returns {Array} Teams with auction-ready state (purse, squad, overseas count)
  */
 export const initializeAuctionTeams = (teams) => {
   return teams.map(team => ({
@@ -163,7 +188,9 @@ export const initializeAuctionTeams = (teams) => {
 };
 
 /**
- * Shuffle player pool for auction
+ * Shuffle player pool for randomized auction order
+ * @param {Array} players - Array of player objects
+ * @returns {Array} Shuffled copy of player array (Fisher-Yates algorithm)
  */
 export const shufflePlayerPool = (players) => {
   const shuffled = [...players];
@@ -175,7 +202,12 @@ export const shufflePlayerPool = (players) => {
 };
 
 /**
- * Check if squad is valid (meets minimum/maximum requirements)
+ * Check if squad meets minimum and maximum requirements
+ * @param {Array} squad - Team squad array
+ * @param {number} [squadSize=25] - Maximum squad size
+ * @returns {Object} Validation result with isValid flag and message
+ * @returns {boolean} returns.isValid - True if squad is valid
+ * @returns {string} returns.message - Validation message
  */
 export const validateSquad = (squad, squadSize = AUCTION_CONFIG.SQUAD_MAX) => {
   return {

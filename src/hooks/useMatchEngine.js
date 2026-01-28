@@ -1,8 +1,24 @@
+/**
+ * @fileoverview Cricket match simulation engine using player statistics
+ * @module useMatchEngine
+ * @description Simulates ball-by-ball cricket matches with realistic outcomes based on player averages, strike rates, and bowling stats
+ */
+
 // src/hooks/useMatchEngine.js
 import { useState } from "react";
 
 // --- COMMENTARY & SIMULATION HELPERS ---
 
+/**
+ * Generate commentary text for a ball outcome
+ * @param {string} outcome - Ball outcome code ('0', '1', '2', '3', '4', '6', 'W', 'Ex')
+ * @param {Object} batsman - Batsman player object
+ * @param {string} batsman.name - Batsman's name
+ * @param {Object} bowler - Bowler player object
+ * @param {string} bowler.name - Bowler's name
+ * @param {number} ballsBowled - Total balls bowled in innings
+ * @returns {string} Commentary text for the ball
+ */
 const getCommentaryText = (outcome, batsman, bowler, ballsBowled) => {
     const overStr =
         Math.floor(ballsBowled / 6) + "." + (ballsBowled % 6);
@@ -31,6 +47,19 @@ const getCommentaryText = (outcome, batsman, bowler, ballsBowled) => {
     }
 };
 
+/**
+ * Simulate a single ball outcome based on player statistics
+ * @param {Object} batsman - Batsman player object with avg, sr properties
+ * @param {number} batsman.avg - Batting average
+ * @param {number} batsman.sr - Strike rate
+ * @param {Object} bowler - Bowler player object with bowlAvg, bowlEcon properties
+ * @param {number} bowler.bowlAvg - Bowling average
+ * @param {number} bowler.bowlEcon - Economy rate
+ * @param {Object} [matchState] - Optional match state for phase adjustments
+ * @param {number} matchState.ballsBowled - Balls bowled in current innings
+ * @returns {string} Outcome code ('0', '1', '2', '3', '4', '6', 'W', 'Ex')
+ * @description Uses batting average, strike rate, bowling average, and economy for realistic simulation
+ */
 // simple outcome using player averages (can be improved)
 const simulateBallOutcome = (batsman, bowler, matchState = null) => {
     const batAvg = batsman?.avg || 30;

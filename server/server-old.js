@@ -2,15 +2,9 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const helmet = require("helmet");
-const compression = require("compression");
 const http = require("http");
 const { Server } = require("socket.io");
 const axios = require("axios");
-
-// Import utilities
-const logger = require("./utils/logger");
-const { createRateLimitMiddleware } = require("./utils/rateLimiter");
 
 // Import controllers
 const { initializeRoomHandlers } = require("./controllers/roomController");
@@ -34,15 +28,6 @@ const allowedOrigins = [
   FRONTEND_URL,
 ].filter(Boolean);
 
-// Security middleware
-app.use(helmet({
-  contentSecurityPolicy: false, // Allow inline styles for now
-  crossOriginEmbedderPolicy: false,
-}));
-
-// Compression middleware
-app.use(compression());
-
 app.use(
   cors({
     origin: allowedOrigins,
@@ -50,8 +35,7 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json());
 
 // ============ REST API ENDPOINTS ============
 
@@ -106,7 +90,7 @@ app.get("/api/players/search", async (req, res) => {
 
     return res.json({ players: mapped });
   } catch (err) {
-    logger.error("Error in /api/players/search:", err.message);
+    console.error("Error in /api/players/search:", err.message);
     return res.status(200).json({
       players: [],
       error: "Server error contacting CricketData",
@@ -125,13 +109,10 @@ const io = new Server(server, {
   },
 });
 
-// Apply rate limiting middleware
-io.use(createRateLimitMiddleware(io));
-
 // ============ SOCKET EVENT HANDLERS ============
 
 io.on("connection", (socket) => {
-  logger.socket('connection', { socketId: socket.id });
+  console.log("✅ Socket connected:", socket.id);
 
   // Initialize all modular handlers
   initializeRoomHandlers(socket, io);
@@ -148,19 +129,19 @@ const cleanupInterval = startCleanupInterval();
 // ============ GRACEFUL SHUTDOWN ============
 
 process.on('SIGTERM', () => {
-  logger.warn('SIGTERM received, cleaning up...');
+  console.log('SIGTERM received, cleaning up...');
   clearInterval(cleanupInterval);
   server.close(() => {
-    logger.info('Server closed');
+    console.log('Server closed');
     process.exit(0);
   });
 });
 
 process.on('SIGINT', () => {
-  logger.warn('SIGINT received, cleaning up...');
+  console.log('SIGINT received, cleaning up...');
   clearInterval(cleanupInterval);
   server.close(() => {
-    logger.info('Server closed');
+    console.log('Server closed');
     process.exit(0);
   });
 });
@@ -168,11 +149,15 @@ process.on('SIGINT', () => {
 // ============ START SERVER ============
 
 server.listen(PORT, () => {
-  logger.startup({
-    port: PORT,
-    corsOrigins: allowedOrigins.length,
-    logLevel: process.env.LOG_LEVEL || 'INFO',
-  });
+  console.log(`
+╔════════════════════════════════════════╗
+║    CricSim Pro Server Running          ║
+║    🎮 WebSocket Server Active          ║
+║    📍 Port: ${PORT}                        ║
+║    🌐 CORS Origins: ${allowedOrigins.length} configured   ║
+║    🧹 Auto-cleanup: Active             ║
+╚════════════════════════════════════════╝
+  `);
 });
 
 module.exports = server;

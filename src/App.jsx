@@ -60,36 +60,54 @@ const App = () => {
     }, {});
   }, [viewToPath]);
 
-  // Refs to prevent circular updates
-  const lastUrlRef = React.useRef(null);
-  const viewRef = React.useRef(view);
+  // Initialize view from URL on mount - fixes reload issue
+  const [hasInitialized, setHasInitialized] = React.useState(false);
+  
   useEffect(() => {
-    viewRef.current = view;
-  }, [view]);
-
-  // Sync URL when view changes - only navigate if URL actually needs to change
-  useEffect(() => {
-    const path = viewToPath[view];
-    if (path && lastUrlRef.current !== path) {
-      lastUrlRef.current = path;
-      navigate(path, { replace: false });
+    if (!hasInitialized) {
+      const pathView = pathToView[location.pathname];
+      if (pathView && pathView !== view) {
+        setView(pathView);
+      }
+      setHasInitialized(true);
     }
-  }, [view, viewToPath, navigate]);
+  }, [hasInitialized, location.pathname, pathToView, view, setView]);
 
-  // Sync view when URL changes (e.g. back button or manual entry)
-  // Only runs when pathname changes, not when view changes
+  // Track last navigation source to prevent circular syncing
+  const lastNavSourceRef = React.useRef(null);
+
+  // Effect 1: When view state changes, navigate to the URL
   useEffect(() => {
+    if (!hasInitialized) return; // Skip during initialization
+    
+    const path = viewToPath[view];
+    if (path && location.pathname !== path) {
+      lastNavSourceRef.current = 'view-change';
+      navigate(path, { replace: true });
+    }
+  }, [view, viewToPath, navigate, location.pathname, hasInitialized]);
+
+  // Effect 2: When URL changes manually (back button, direct URL), sync view state
+  useEffect(() => {
+    if (!hasInitialized) return; // Skip during initialization
+    
+    // Only sync if the change came from URL, not from our view change
+    if (lastNavSourceRef.current === 'view-change') {
+      lastNavSourceRef.current = null;
+      return;
+    }
+
     const currentPath = location.pathname;
     const newView = pathToView[currentPath];
     
-    if (newView && newView !== viewRef.current) {
-      viewRef.current = newView;
+    if (newView && newView !== view) {
+      lastNavSourceRef.current = 'url-change';
       setView(newView);
-    } else if (!newView && currentPath === "/" && viewRef.current !== "menu") {
-      viewRef.current = "menu";
+    } else if (!newView && currentPath === "/" && view !== "menu") {
+      lastNavSourceRef.current = 'url-change';
       setView("menu");
     }
-  }, [location.pathname, pathToView]);
+  }, [location.pathname, pathToView, view, setView, hasInitialized]);
 
   // Destructure all state from centralized hook
   const {

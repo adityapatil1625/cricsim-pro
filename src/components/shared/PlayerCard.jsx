@@ -1,7 +1,31 @@
+/**
+ * @fileoverview Player card display component
+ * @module PlayerCard
+ */
 // components/shared/PlayerCard.jsx
 import React from 'react';
 import { Plus } from './Icons';
 
+/**
+ * PlayerCard - Displays individual cricket player stats and information
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} props.player - Player object to display
+ * @param {string} props.player.name - Player's name
+ * @param {string} props.player.role - Role ('Bat', 'Bowl', or 'All-rounder')
+ * @param {number} props.player.avg - Batting average
+ * @param {number} props.player.sr - Strike rate
+ * @param {number} [props.player.bowlAvg] - Bowling average (if bowler)
+ * @param {number} [props.player.bowlEcon] - Economy rate (if bowler)
+ * @param {Function} [props.onAdd] - Callback when player is added/selected
+ * @returns {JSX.Element} Player card with stats and action button
+ * 
+ * @example
+ * <PlayerCard 
+ *   player={playerObj} 
+ *   onAdd={() => addPlayerToTeam(playerObj)} 
+ * />
+ */
 const PlayerCard = ({ player, onAdd }) => (
     <div className="glass-card rounded-lg p-3 flex items-center justify-between gap-3 cursor-pointer group hover:bg-slate-800/50 border-l-2 border-transparent hover:border-l-brand-gold">
         <div className="flex flex-col min-w-0 flex-1">

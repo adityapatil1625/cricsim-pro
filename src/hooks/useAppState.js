@@ -1,8 +1,20 @@
 import { useState } from 'react';
 
 /**
- * useAppState - Centralized application state management
- * Separates all state declarations from App.jsx for better organization
+ * @fileoverview Centralized application state management hook
+ * @module useAppState
+ * @description Consolidates all application state declarations, separating state logic from App.jsx
+ * Manages view routing, game modes (quick play, tournament, auction, online), teams, matches, and multiplayer state
+ * 
+ * @returns {Object} Complete app state object with getters and setters for all features
+ * 
+ * @example
+ * const {
+ *   view, setView,
+ *   teamA, setTeamA, teamB, setTeamB,
+ *   onlineRoom, setOnlineRoom,
+ *   matchState, setMatchState
+ * } = useAppState();
  */
 export const useAppState = () => {
   // View management
