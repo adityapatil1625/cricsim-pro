@@ -47,7 +47,7 @@ const PlayerCard = ({ player, onAdd, compact = false }) => (
             </div>
             <div className={`flex ${compact ? 'gap-2 text-[10px]' : 'gap-4 text-xs'} text-slate-400 font-mono mt-1`}>
         <span>
-          Avg: <span className="text-white">{player.avg}</span>
+                    Avg: <span className="text-white">{player.role === 'Bowl' ? player.bowlAvg : player.avg}</span>
         </span>
                 <span>
           SR: <span className="text-white">{player.sr}</span>

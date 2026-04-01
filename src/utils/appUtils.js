@@ -17,14 +17,14 @@ export const capitalizeFirstLetter = (str) => {
 /**
  * Generate a unique ID for instances (players in teams, etc.)
  */
-export const generateId = () => Math.random().toString(36).slice(2);
+export const generateId = () => Math.random().toString(36).slice(2, 12).padEnd(10, '0');
 
 /**
  * Get team display info (name, logo, color) from a team object
  * Handles both local teams and IPL teams
  */
 export const getTeamDisplay = (team) => {
-  if (!team) return { name: "Unknown", logo: null, color: "#666" };
+  if (!team) return { name: "Unknown", logo: null, color: "#666", shortName: "Unknown" };
   const iplTeam = IPL_TEAMS.find(t => t.id === team.iplTeamId);
   return {
     name: iplTeam ? iplTeam.name : team.name,
@@ -32,22 +32,6 @@ export const getTeamDisplay = (team) => {
     color: iplTeam ? iplTeam.color : "#666",
     shortName: iplTeam ? iplTeam.id : team.name
   };
-};
-
-/**
- * Process a player pool - merge, deduplicate, and clean data
- * Used to combine mock database with IPL data
- */
-export const buildPlayerPool = (mockPlayers, iplPlayers) => {
-  const merged = [...iplPlayers, ...mockPlayers];
-  const seen = new Set();
-  return merged.filter((p) => {
-    if (!p || !p.name) return false;
-    const key = p.name.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 };
 
 /**
@@ -67,17 +51,6 @@ export const initializeTeam = (id, name, iplTeamId = null) => ({
   runsConceded: 0,
   oversBowled: 0,
 });
-
-/**
- * Create reverse mapping from paths to view states
- * Inverse of VIEW_TO_PATH
- */
-export const createPathToViewMap = (viewToPath) => {
-  return Object.entries(viewToPath).reduce((acc, [key, value]) => {
-    acc[value] = key;
-    return acc;
-  }, {});
-};
 
 /**
  * Auto-draft a complete squad from available players
@@ -176,17 +149,4 @@ export const generateFinal = (semi1Winner, semi2Winner) => {
     played: false,
     stage: "final"
   }];
-};
-
-export default {
-  generateId,
-  getTeamDisplay,
-  buildPlayerPool,
-  initializeTeam,
-  createPathToViewMap,
-  autoDraftSquad,
-  isPlayerInTeam,
-  getLeaderboard,
-  generateSemiFinals,
-  generateFinal,
 };

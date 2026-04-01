@@ -2,15 +2,9 @@
 import React, { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import MatchCenter from "./components/match/MatchCenter";
-import PlayerSearch from "./components/shared/PlayerSearch";
-import TeamListItem from "./components/shared/TeamListItem";
-import TournamentBracket from "./components/tournament/TournamentBracket";
-import TournamentLeaderboards from "./components/tournament/TournamentLeaderboards";
-import AuctionRoom from "./components/auction/AuctionRoom";
 import AuctionPageLayout from "./components/auction/AuctionPageLayout";
 import useMatchEngine from "./hooks/useMatchEngine";
 import useAppState from "./hooks/useAppState";
-import { Zap, Trophy, ChevronLeft, Shuffle } from "./components/shared/Icons";
 
 // Import page components
 import MenuPage from "./pages/MenuPage";
@@ -24,13 +18,10 @@ import MatchSummaryPage from "./pages/MatchSummaryPage";
 import Footer from "./components/shared/Footer";
 
 // Import constants and utilities
-import { IPL_TEAMS, VIEW_TO_PATH, TOURNAMENT_PHASES, ONLINE_GAME_TYPES, MATCH_TABS } from "./constants/appConstants";
-import { generateId, getTeamDisplay, buildPlayerPool } from "./utils/appUtils";
-import SOCKET_EVENTS from "./constants/socketEvents";
+import { IPL_TEAMS, VIEW_TO_PATH } from "./constants/appConstants";
+import { generateId, getTeamDisplay } from "./utils/appUtils";
 
-import rawIplData from "./data/iplData.json";
-import { processIPLData } from "./data/cricketProcessing";
-import { IPL_PLAYER_POOL_V2, buildSimpleAuctionQueue, getSetById } from "./data/playerPoolV2";
+import { IPL_PLAYER_POOL_V2 } from "./data/playerPoolV2";
 import { socket } from "./socket";
 
 // ---------- LOCAL PLAYER POOL (NEW: Comprehensive IPL Player Pool V2) ----------

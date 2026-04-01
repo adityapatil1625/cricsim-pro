@@ -16,6 +16,8 @@ describe('Rate Limiter Utility', () => {
 
   afterEach(() => {
     clearRateLimit(testSocketId);
+    clearRateLimit('socket-1');
+    clearRateLimit('socket-2');
   });
 
   describe('checkRateLimit', () => {

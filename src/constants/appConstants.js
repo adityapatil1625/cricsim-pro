@@ -29,31 +29,3 @@ export const VIEW_TO_PATH = {
   match_summary: "/match/summary",
   auction: "/auction/room",
 };
-
-export const TOURNAMENT_PHASES = {
-  LEAGUE: "league",
-  SEMI: "semi",
-  FINAL: "final",
-  COMPLETE: "complete",
-};
-
-export const ONLINE_GAME_TYPES = {
-  QUICK: "quick",
-  TOURNAMENT: "tournament",
-  AUCTION: "auction",
-};
-
-export const MATCH_TABS = {
-  LIVE: "live",
-  SCORECARD: "scorecard",
-  COMMENTARY: "commentary",
-  RESULTS: "results",
-};
-
-export default {
-  IPL_TEAMS,
-  VIEW_TO_PATH,
-  TOURNAMENT_PHASES,
-  ONLINE_GAME_TYPES,
-  MATCH_TABS,
-};

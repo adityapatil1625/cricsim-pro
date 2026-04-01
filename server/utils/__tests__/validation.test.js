@@ -1,11 +1,13 @@
 // server/utils/__tests__/validation.test.js
-const { describe, it, expect } = require('vitest');
+import { describe, it, expect } from 'vitest';
+import validation from '../validation';
+
 const {
   validateRoomCode,
   validatePlayerName,
   validateGameMode,
   validateBidAmount,
-} = require('../validation');
+} = validation;
 
 describe('validation', () => {
   describe('validateRoomCode', () => {
