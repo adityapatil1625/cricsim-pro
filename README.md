@@ -90,17 +90,10 @@ A production-ready multiplayer IPL auction and cricket simulation platform with 
 - Node.js 24.x or higher
 - npm 11.x or higher
 
-### Windows Quick Launch
+### Quick Launch
 ```bash
-cd c:\Users\adity\Downloads\cricsim-pro-v3\cricsim-pro-v3
-start-dev.bat
-```
-
-### Mac/Linux Quick Launch
-```bash
-cd path/to/cricsim-pro-v3
-chmod +x start-dev.sh
-./start-dev.sh
+cd c:\Users\adity\Downloads\cricsim-pro-main
+npm run dev:all
 ```
 
 ### Manual Setup
@@ -161,10 +154,7 @@ cricsim-pro-v3/
 ├── vite.config.js
 ├── tailwind.config.cjs
 ├── postcss.config.cjs
-├── Procfile
 ├── vercel.json
-├── start-dev.bat
-├── start-dev.sh
 └── README.md (this file)
 ```
 
@@ -196,13 +186,9 @@ cp server/.env.example server/.env
 
 ### 4. Start Development Servers
 
-**Option A: Automated (Recommended)**
+**Option A: Single Command (Recommended)**
 ```bash
-# Windows
-start-dev.bat
-
-# Mac/Linux
-./start-dev.sh
+npm run dev:all
 ```
 
 **Option B: Manual**
@@ -450,7 +436,7 @@ Host announces next player:
 
 ## Next Steps
 
-1. **Test Locally** - Run `start-dev.bat` or `./start-dev.sh`
+1. **Test Locally** - Run `npm run dev:all`
 2. **Understand Flow** - Review the multiplayer features section
 3. **Deploy Backend** - Push to Render.com
 4. **Deploy Frontend** - Push to Vercel

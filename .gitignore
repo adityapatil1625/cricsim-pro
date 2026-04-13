@@ -26,3 +26,7 @@ Thumbs.db
 # Local agent/automation metadata
 .codex/
 .github/
+
+# Unused container artifacts
+Dockerfile
+.dockerignore
