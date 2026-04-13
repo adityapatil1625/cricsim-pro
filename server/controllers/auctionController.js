@@ -26,6 +26,18 @@ function createLogEntry(message, type = "info") {
   };
 }
 
+function createBidHistoryEntry(team, player, bid) {
+  return {
+    teamId: team?.id,
+    socketId: team?.socketId,
+    teamName: team?.iplTeamId || team?.name || "Team",
+    playerId: player?.id,
+    playerName: player?.name,
+    bid,
+    timestamp: new Date(),
+  };
+}
+
 function createInitialAuctionTeams(teams = []) {
   return teams.map((team) => ({
     ...team,
@@ -40,9 +52,9 @@ function createInitialAuctionTeams(teams = []) {
 function getTeamRoleBalance(squad = []) {
   return squad.reduce(
     (acc, player) => {
-      const role = String(player?.role || "").toLowerCase();
-      if (role.includes("wk")) acc.wicketkeepers += 1;
-      else if (role.includes("all")) acc.allrounders += 1;
+      const role = String(player?.role || "").toLowerCase().replace(/[\s_-]+/g, "");
+      if (role.includes("wicketkeeper") || role === "wk" || role.includes("keeper")) acc.wicketkeepers += 1;
+      else if (role.includes("allrounder") || role.includes("allround")) acc.allrounders += 1;
       else if (role.includes("bowl")) acc.bowlers += 1;
       else acc.batters += 1;
       return acc;
@@ -78,6 +90,7 @@ function serializeAuctionState(state) {
     bidError: null,
     soldPlayers: state.soldPlayers,
     auctionLog: state.auctionLog,
+    bidHistory: state.bidHistory,
     lastSoldPlayer: state.lastSoldPlayer,
     showSoldOverlay: state.showSoldOverlay,
     auctionTeams: state.auctionTeams,
@@ -144,7 +157,7 @@ function advanceToNextPlayer(code, io) {
   state.timer = AUCTION_CONFIG.BID_TIMER;
   state.biddingStage = "PLAYER_ANNOUNCED";
   state.auctionLog = [
-    createLogEntry(`📍 ${nextPlayer.name} is up for auction - Base price ₹${basePrice}L`, "player"),
+    createLogEntry(`${nextPlayer.name} is up for auction - Base price Rs ${basePrice}L`, "player"),
     ...state.auctionLog.slice(0, 99),
   ];
 
@@ -189,7 +202,7 @@ function settleCurrentPlayer(code, io) {
     ];
     state.auctionLog = [
       createLogEntry(
-        `✅ ${player.name} (${player.role || "player"}) sold for ₹${price}L to ${soldTeam?.iplTeamId || teamId}`,
+        `${player.name} (${player.role || "player"}) sold for Rs ${price}L to ${soldTeam?.iplTeamId || teamId}`,
         "sold"
       ),
       ...state.auctionLog.slice(0, 99),
@@ -279,11 +292,11 @@ function validateAuctionBid(state, teamId, bidAmount, playerId) {
 
   const expectedBid = state.currentBid + getBidIncrement(state.currentBid);
   if (bidAmount !== expectedBid) {
-    return { valid: false, error: `Next valid bid is ₹${expectedBid}L` };
+    return { valid: false, error: `Next valid bid is Rs ${expectedBid}L` };
   }
 
   if (bidAmount > team.purse) {
-    return { valid: false, error: `Insufficient purse. Available: ₹${team.purse}L` };
+    return { valid: false, error: `Insufficient purse. Available: Rs ${team.purse}L` };
   }
 
   if ((team.squad?.length || 0) >= AUCTION_CONFIG.SQUAD_MAX) {
@@ -344,6 +357,15 @@ function handleAuctionInitialize(socket, io) {
         return;
       }
 
+      if (room.auctionState?.phase === "running" || room.auctionState?.phase === "paused") {
+        callback?.({
+          success: true,
+          state: serializeAuctionState(room.auctionState),
+        });
+        emitAuctionState(io, codeValidation.code);
+        return;
+      }
+
       updateRoomActivity(codeValidation.code);
       clearAuctionTimers(room);
 
@@ -360,7 +382,8 @@ function handleAuctionInitialize(socket, io) {
         currentBidPlayerId: null,
         timer: 0,
         soldPlayers: [],
-        auctionLog: [createLogEntry("🎬 Auction initialized!", "system")],
+        auctionLog: [createLogEntry("Auction initialized!", "system")],
+        bidHistory: [],
         lastSoldPlayer: null,
         showSoldOverlay: false,
         auctionTeams: createInitialAuctionTeams(teams),
@@ -467,17 +490,130 @@ function handleAuctionBid(socket, io) {
       state.biddingStage = "BIDDING_ACTIVE";
 
       const bidderTeam = state.auctionTeams.find((team) => team.id === data.teamId);
+      state.bidHistory = [
+        createBidHistoryEntry(bidderTeam, state.currentPlayer, bidValidation.bid),
+        ...(state.bidHistory || []).slice(0, 49),
+      ];
       state.auctionLog = [
-        createLogEntry(`💰 ${bidderTeam?.iplTeamId || data.teamId} bid ₹${bidValidation.bid}L for ${state.currentPlayer.name}`, "bid"),
+        createLogEntry(`${bidderTeam?.iplTeamId || data.teamId} bid Rs ${bidValidation.bid}L for ${state.currentPlayer.name}`, "bid"),
         ...state.auctionLog.slice(0, 99),
       ];
 
-      console.log(`💰 Canonical bid in ${code}: ${bidderTeam?.iplTeamId || data.teamId} -> ₹${bidValidation.bid}L`);
+      console.log(`Canonical bid in ${code}: ${bidderTeam?.iplTeamId || data.teamId} -> Rs ${bidValidation.bid}L`);
       emitAuctionState(io, code);
       scheduleAuctionTick(code, io);
       callback?.({ success: true });
     } catch (error) {
       console.error("❌ Error in auctionBid:", error);
+      callback?.({ success: false, error: error.message });
+    }
+  });
+}
+
+function handleAuctionControl(socket, io) {
+  socket.on("auctionControl", (data, callback) => {
+    try {
+      const codeValidation = validateRoomCode(data?.code);
+      if (!codeValidation.valid) {
+        callback?.({ success: false, error: codeValidation.error });
+        return;
+      }
+
+      const action = data?.action;
+      const code = codeValidation.code;
+      const room = rooms.get(code);
+      if (!room) {
+        callback?.({ success: false, error: "Room not found" });
+        return;
+      }
+
+      if (room.host !== socket.id) {
+        callback?.({ success: false, error: "Only the host can control the auction" });
+        return;
+      }
+
+      const state = room.auctionState;
+      if (!state) {
+        callback?.({ success: false, error: "Auction has not started" });
+        return;
+      }
+
+      const isSettling = state.biddingStage === "SOLD" || state.biddingStage === "UNSOLD";
+      if ((action === "pause" || action === "skip" || action === "accelerate") && isSettling) {
+        callback?.({ success: false, error: "Current player is already being settled" });
+        return;
+      }
+
+      updateRoomActivity(code);
+
+      if (action === "pause") {
+        if (state.phase !== "running") {
+          callback?.({ success: false, error: "Auction is not running" });
+          return;
+        }
+
+        clearAuctionTimers(room);
+        state.phase = "paused";
+        state.auctionLog = [
+          createLogEntry("Auction paused by host", "system"),
+          ...state.auctionLog.slice(0, 99),
+        ];
+        emitAuctionState(io, code);
+        callback?.({ success: true });
+        return;
+      }
+
+      if (action === "resume") {
+        if (state.phase !== "paused") {
+          callback?.({ success: false, error: "Auction is not paused" });
+          return;
+        }
+
+        state.phase = "running";
+        state.auctionLog = [
+          createLogEntry("Auction resumed by host", "system"),
+          ...state.auctionLog.slice(0, 99),
+        ];
+        emitAuctionState(io, code);
+        scheduleAuctionTick(code, io);
+        callback?.({ success: true });
+        return;
+      }
+
+      if (action === "skip") {
+        if (!state.currentPlayer || (state.phase !== "running" && state.phase !== "paused")) {
+          callback?.({ success: false, error: "No active player to settle" });
+          return;
+        }
+
+        state.phase = "running";
+        settleCurrentPlayer(code, io);
+        callback?.({ success: true });
+        return;
+      }
+
+      if (action === "accelerate") {
+        if (state.phase !== "running" || !state.currentPlayer) {
+          callback?.({ success: false, error: "Auction is not running" });
+          return;
+        }
+
+        clearAuctionTimers(room);
+        state.timer = Math.min(Math.max(state.timer || 1, 1), 3);
+        state.biddingStage = state.timer <= 1 ? "GOING_TWICE" : "GOING_ONCE";
+        state.auctionLog = [
+          createLogEntry("Auction clock accelerated by host", "system"),
+          ...state.auctionLog.slice(0, 99),
+        ];
+        emitAuctionState(io, code);
+        scheduleAuctionTick(code, io);
+        callback?.({ success: true });
+        return;
+      }
+
+      callback?.({ success: false, error: "Unknown auction control" });
+    } catch (error) {
+      console.error("Error in auctionControl:", error);
       callback?.({ success: false, error: error.message });
     }
   });
@@ -491,6 +627,7 @@ function initializeAuctionHandlers(socket, io) {
   handleAuctionInitialize(socket, io);
   handleAuctionStateRequest(socket);
   handleAuctionBid(socket, io);
+  handleAuctionControl(socket, io);
 }
 
 module.exports = {

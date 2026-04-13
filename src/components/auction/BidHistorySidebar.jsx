@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { formatAuctionPrice } from '../../utils/auctionUtils';
 
 const BidHistorySidebar = ({ bids = [], teams = [] }) => {
   const getTeamLogo = (teamId) => {
@@ -50,7 +51,7 @@ const BidHistorySidebar = ({ bids = [], teams = [] }) => {
                   {bid.teamName || 'Team'}
                 </div>
                 <div className="text-sm font-bold text-brand-gold">
-                  ₹{bid.bid}L
+                  {formatAuctionPrice(bid.bid)}
                 </div>
               </div>
 

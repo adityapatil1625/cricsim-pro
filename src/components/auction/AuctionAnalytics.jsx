@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { formatAuctionPrice } from '../../utils/auctionUtils';
 
 const AuctionAnalytics = ({ teams = [], soldPlayers = [], currentPlayer = null, queue = [], fullQueue = [], getSetById = null }) => {
   // Config - must be declared before use
@@ -83,7 +84,7 @@ const AuctionAnalytics = ({ teams = [], soldPlayers = [], currentPlayer = null, 
             {mostExpensive.player?.name}
           </div>
           <div className="text-base font-bold text-purple-300 mt-1">
-            ₹{mostExpensive.price}L
+            {formatAuctionPrice(mostExpensive.price)}
           </div>
           <div className="text-[9px] text-purple-400 mt-1">
             {mostExpensive.team?.iplTeamId}
@@ -108,8 +109,8 @@ const AuctionAnalytics = ({ teams = [], soldPlayers = [], currentPlayer = null, 
             </div>
           </div>
           <div className="border-t border-red-700/50 pt-0.5">
-            <p className="text-[11px] text-red-400">Spent: ₹{highestSpender.totalSpend || 0}Cr</p>
-            <p className="text-[11px] text-red-400">Left: ₹{highestSpender.purse}Cr</p>
+            <p className="text-[11px] text-red-400">Spent: {formatAuctionPrice(highestSpender.totalSpend || 0)}</p>
+            <p className="text-[11px] text-red-400">Left: {formatAuctionPrice(highestSpender.purse)}</p>
           </div>
         </div>
       )}
@@ -124,7 +125,7 @@ const AuctionAnalytics = ({ teams = [], soldPlayers = [], currentPlayer = null, 
             {mostExpensiveUncapped.player?.name}
           </div>
           <div className="text-base font-bold text-emerald-300 mt-1">
-            ₹{mostExpensiveUncapped.price}L
+            {formatAuctionPrice(mostExpensiveUncapped.price)}
           </div>
           <div className="text-[9px] text-emerald-400 mt-1">
             {mostExpensiveUncapped.player?.country}
@@ -141,8 +142,8 @@ const AuctionAnalytics = ({ teams = [], soldPlayers = [], currentPlayer = null, 
           {soldPlayers.length}
         </div>
         <div className="border-t border-blue-700/50 pt-0.5">
-          <p className="text-[11px] text-blue-400">Total: ₹{soldPlayers.reduce((sum, p) => sum + (p.price || 0), 0)}Cr</p>
-          <p className="text-[11px] text-blue-400">Avg: ₹{soldPlayers.length > 0 ? (soldPlayers.reduce((sum, p) => sum + (p.price || 0), 0) / soldPlayers.length).toFixed(1) : 0}Cr</p>
+          <p className="text-[11px] text-blue-400">Total: {formatAuctionPrice(soldPlayers.reduce((sum, p) => sum + (p.price || 0), 0))}</p>
+          <p className="text-[11px] text-blue-400">Avg: {formatAuctionPrice(soldPlayers.length > 0 ? Number((soldPlayers.reduce((sum, p) => sum + (p.price || 0), 0) / soldPlayers.length).toFixed(1)) : 0)}</p>
         </div>
       </div>
 
@@ -156,7 +157,7 @@ const AuctionAnalytics = ({ teams = [], soldPlayers = [], currentPlayer = null, 
             {mostExpensiveCapped.player?.name}
           </div>
           <div className="border-t border-amber-700/50 pt-0.5 mt-0.5">
-            <p className="text-[11px] text-amber-400">₹{mostExpensiveCapped.price}Cr</p>
+            <p className="text-[11px] text-amber-400">{formatAuctionPrice(mostExpensiveCapped.price)}</p>
             <p className="text-[11px] text-amber-400">{mostExpensiveCapped.team?.iplTeamId}</p>
           </div>
         </div>
@@ -168,7 +169,7 @@ const AuctionAnalytics = ({ teams = [], soldPlayers = [], currentPlayer = null, 
           💸 Remaining
         </div>
         <div className="text-lg font-bold text-green-300 mb-0.5">
-          ₹{totalRemainingPurse}Cr
+          {formatAuctionPrice(totalRemainingPurse)}
         </div>
         <div className="border-t border-green-700/50 pt-0.5">
           <p className="text-[11px] text-green-400">Teams: {teams.length}</p>

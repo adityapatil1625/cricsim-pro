@@ -73,6 +73,37 @@ export const PLAYER_ROLES = {
   WICKETKEEPER: 'wicketkeeper',
 };
 
+export const normalizeAuctionRole = (role) => {
+  const normalized = String(role || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+
+  if (normalized.includes('wicketkeeper') || normalized === 'wk' || normalized.includes('keeper')) {
+    return PLAYER_ROLES.WICKETKEEPER;
+  }
+  if (normalized.includes('allrounder') || normalized.includes('allround')) {
+    return PLAYER_ROLES.ALLROUNDER;
+  }
+  if (normalized.includes('bowl')) {
+    return PLAYER_ROLES.BOWLER;
+  }
+  if (normalized.includes('bat')) {
+    return PLAYER_ROLES.BATTER;
+  }
+
+  return PLAYER_ROLES.BATTER;
+};
+
+export const formatAuctionPrice = (lakhs = 0) => {
+  const amount = Number(lakhs) || 0;
+
+  if (Math.abs(amount) >= 100) {
+    const crore = amount / 100;
+    const display = Number.isInteger(crore) ? crore.toString() : crore.toFixed(2);
+    return `Rs ${display}Cr`;
+  }
+
+  return `Rs ${amount}L`;
+};
+
 /**
  * Calculate bid increment based on current bid amount
  * Increments increase as bids get higher
@@ -353,11 +384,9 @@ export const canStartAuction = (teams, minimumTeams = 2) => {
  * Validate team composition (overseas limit, roles, etc.)
  */
 export const validateTeamComposition = (squad, config = {}) => {
-  const {
-    maxPlayers = 25,
-    minPlayers = 18,
-    maxOverseas = 8,
-  } = config;
+  const maxPlayers = config.maxPlayers ?? config.SQUAD_MAX ?? AUCTION_CONFIG.SQUAD_MAX;
+  const minPlayers = config.minPlayers ?? config.SQUAD_MIN ?? AUCTION_CONFIG.SQUAD_MIN;
+  const maxOverseas = config.maxOverseas ?? config.MAX_OVERSEAS ?? AUCTION_CONFIG.MAX_OVERSEAS;
   
   const issues = [];
   
@@ -393,9 +422,9 @@ export const validateTeamComposition = (squad, config = {}) => {
  */
 export const getTeamRoleBalance = (squad) => {
   return {
-    batters: squad.filter(p => p.role === PLAYER_ROLES.BATTER).length,
-    bowlers: squad.filter(p => p.role === PLAYER_ROLES.BOWLER).length,
-    allrounders: squad.filter(p => p.role === PLAYER_ROLES.ALLROUNDER).length,
-    wicketkeepers: squad.filter(p => p.role === PLAYER_ROLES.WICKETKEEPER).length,
+    batters: squad.filter(p => normalizeAuctionRole(p.role) === PLAYER_ROLES.BATTER).length,
+    bowlers: squad.filter(p => normalizeAuctionRole(p.role) === PLAYER_ROLES.BOWLER).length,
+    allrounders: squad.filter(p => normalizeAuctionRole(p.role) === PLAYER_ROLES.ALLROUNDER).length,
+    wicketkeepers: squad.filter(p => normalizeAuctionRole(p.role) === PLAYER_ROLES.WICKETKEEPER).length,
   };
 };

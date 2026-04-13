@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { PLAYER_ROLES, formatAuctionPrice, normalizeAuctionRole } from '../../utils/auctionUtils';
 
 const MySquadPanel = ({ team = null }) => {
   if (!team || !team.squad) {
@@ -12,10 +13,10 @@ const MySquadPanel = ({ team = null }) => {
 
   // Classify players by role
   const playersByRole = {
-    WICKETKEEPER: team.squad.filter(p => p.role === 'WICKETKEEPER'),
-    BATTER: team.squad.filter(p => p.role === 'BATTER'),
-    ALLROUNDER: team.squad.filter(p => p.role === 'ALLROUNDER'),
-    BOWLER: team.squad.filter(p => p.role === 'BOWLER'),
+    WICKETKEEPER: team.squad.filter(p => normalizeAuctionRole(p.role) === PLAYER_ROLES.WICKETKEEPER),
+    BATTER: team.squad.filter(p => normalizeAuctionRole(p.role) === PLAYER_ROLES.BATTER),
+    ALLROUNDER: team.squad.filter(p => normalizeAuctionRole(p.role) === PLAYER_ROLES.ALLROUNDER),
+    BOWLER: team.squad.filter(p => normalizeAuctionRole(p.role) === PLAYER_ROLES.BOWLER),
   };
 
   const roleConfig = {
@@ -30,7 +31,7 @@ const MySquadPanel = ({ team = null }) => {
       <div>
         <h4 className="text-base font-bold text-white mb-3">📋 My Squad</h4>
         <div className="text-sm text-slate-400 mb-3">
-          {team.squad.length}/25 Players • ₹{team.purse}Cr Purse
+          {team.squad.length}/25 Players - {formatAuctionPrice(team.purse)} Purse
         </div>
       </div>
 
@@ -59,7 +60,7 @@ const MySquadPanel = ({ team = null }) => {
                         <span className="text-[9px] bg-blue-900/50 text-blue-300 px-1.5 py-0.5 rounded">OVS</span>
                       )}
                       <span className="text-slate-400 font-semibold whitespace-nowrap">
-                        ₹{player.soldPrice}Cr
+                        {formatAuctionPrice(player.soldPrice)}
                       </span>
                     </div>
                   </div>

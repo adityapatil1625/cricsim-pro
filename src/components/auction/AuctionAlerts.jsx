@@ -4,8 +4,9 @@
  */
 
 import React from 'react';
+import { formatAuctionPrice } from '../../utils/auctionUtils';
 
-const AuctionAlerts = ({ team = null, currentBid = 0, nextBidAmount = 0 }) => {
+const AuctionAlerts = ({ team = null, nextBidAmount = 0 }) => {
   if (!team) return null;
 
   const alerts = [];
@@ -15,13 +16,13 @@ const AuctionAlerts = ({ team = null, currentBid = 0, nextBidAmount = 0 }) => {
     alerts.push({
       type: 'error',
       icon: '💸',
-      message: `Purse insufficient: ₹${team.purse}L available, ₹${nextBidAmount}L required`,
+      message: `Purse insufficient: ${formatAuctionPrice(team.purse)} available, ${formatAuctionPrice(nextBidAmount)} required`,
     });
   } else if (team.purse < nextBidAmount * 1.2) {
     alerts.push({
       type: 'warning',
       icon: '⚠️',
-      message: `Low purse: Only ₹${team.purse}L left`,
+      message: `Low purse: Only ${formatAuctionPrice(team.purse)} left`,
     });
   }
 

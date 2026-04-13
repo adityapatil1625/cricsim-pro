@@ -1477,6 +1477,14 @@ const App = () => {
     if (view === "match_summary") return <MatchSummaryPage {...pageProps} />;
     
     if (view === "auction") {
+      const offlineAuctionTeams = auctionTeams.length > 0
+        ? auctionTeams
+        : IPL_TEAMS.slice(0, 8).map((team) => ({
+            id: team.id,
+            name: team.name,
+            iplTeam: team.id,
+          }));
+
       const auctionPlayers = isOnline 
         ? onlineRoom?.players.filter(p => p.iplTeam).map(p => {
             const iplTeam = IPL_TEAMS.find(t => t.id === p.iplTeam);
@@ -1488,7 +1496,7 @@ const App = () => {
               socketId: p.socketId
             };
           })
-        : auctionTeams.map(t => {
+        : offlineAuctionTeams.map(t => {
             const iplTeam = IPL_TEAMS.find(ipl => ipl.id === t.iplTeam);
             return {
               id: t.id,
@@ -1501,14 +1509,14 @@ const App = () => {
       
       const myTeamId = isOnline 
         ? onlineRoom?.players.find(p => p.socketId === socket.id)?.socketId
-        : socket.id;
+        : auctionPlayers[0]?.id;
       
       return (
         <AuctionPageLayout
           playerPool={LOCAL_POOL}
           teams={auctionPlayers}
           soldPlayers={[]}
-          auctionPhase="running"
+          auctionPhase="initializing"
           currentBid={0}
           isOnlineHost={isOnlineHost}
           onComplete={(completedTeams) => {

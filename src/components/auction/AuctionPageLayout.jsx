@@ -14,10 +14,10 @@ import AdminControls from './AdminControls';
 import AuctionAnalytics from './AuctionAnalytics';
 import AuctionAlerts from './AuctionAlerts';
 import { getSetById } from '../../data/playerPoolV2';
+import { formatAuctionPrice } from '../../utils/auctionUtils';
 
 const AuctionPageLayout = (props) => {
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [showTeamsPanel, setShowTeamsPanel] = useState(true);
   const [bidHistory, setBidHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [displayTeams, setDisplayTeams] = useState(props.teams || []);
@@ -25,6 +25,13 @@ const AuctionPageLayout = (props) => {
   const [queue, setQueue] = useState([]);
   const [fullQueue, setFullQueue] = useState([]);
   const [auctionLog, setAuctionLog] = useState([]);
+  const [auctionState, setAuctionState] = useState({
+    phase: props.auctionPhase || 'initializing',
+    currentBid: props.currentBid || 0,
+    nextBidAmount: 0,
+    soldPlayers: props.soldPlayers || [],
+  });
+  const [controlError, setControlError] = useState(null);
 
   // Simulate data load stabilization
   React.useEffect(() => {
@@ -51,18 +58,53 @@ const AuctionPageLayout = (props) => {
     setAuctionLog(log);
   }, []);
 
-  // Intercept bid placements to track history
-  const handleBidHistory = (bid) => {
-    setBidHistory(prev => [
-      {
-        teamId: props.myTeamId,
-        teamName: displayTeams?.find(t => t.id === props.myTeamId)?.name,
-        bid,
-        timestamp: new Date(),
-      },
-      ...prev.slice(0, 49), // Keep last 50 bids
-    ]);
-  };
+  const handleAuctionStateUpdate = useCallback((nextState) => {
+    setAuctionState(prev => ({ ...prev, ...nextState }));
+
+    if (nextState.auctionTeams) setDisplayTeams(nextState.auctionTeams);
+    if (nextState.currentPlayer !== undefined) setCurrentPlayer(nextState.currentPlayer);
+    if (nextState.queue) setQueue(nextState.queue);
+    if (nextState.fullQueue) setFullQueue(nextState.fullQueue);
+    if (nextState.auctionLog) setAuctionLog(nextState.auctionLog);
+    if (nextState.bidHistory) setBidHistory(nextState.bidHistory);
+  }, []);
+
+  const startOnlineAuction = useCallback(() => {
+    if (!props.socket || !props.onlineRoom?.code) return;
+
+    const queueToStart = fullQueue.length > 0 ? fullQueue : queue;
+    if (queueToStart.length === 0) {
+      setControlError('Auction queue is still loading.');
+      return;
+    }
+
+    props.socket.emit('auctionInitialize', {
+      code: props.onlineRoom.code,
+      queue: queueToStart,
+      teams: props.teams || [],
+    }, (response) => {
+      if (!response?.success) {
+        setControlError(response?.error || 'Failed to start auction');
+        return;
+      }
+      setControlError(null);
+    });
+  }, [props.socket, props.onlineRoom?.code, props.teams, fullQueue, queue]);
+
+  const emitAuctionControl = useCallback((action) => {
+    if (!props.socket || !props.onlineRoom?.code) return;
+
+    props.socket.emit('auctionControl', {
+      code: props.onlineRoom.code,
+      action,
+    }, (response) => {
+      if (!response?.success) {
+        setControlError(response?.error || 'Auction control failed');
+        return;
+      }
+      setControlError(null);
+    });
+  }, [props.socket, props.onlineRoom?.code]);
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col relative">
@@ -125,10 +167,10 @@ const AuctionPageLayout = (props) => {
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto custom-scrollbar">
           <AuctionRoom
             {...props}
-            onBidPlaced={handleBidHistory}
             onTeamsUpdate={handleTeamsUpdate}
             onPlayerUpdate={handlePlayerUpdate}
             onAuctionLogUpdate={handleAuctionLogUpdate}
+            onAuctionStateUpdate={handleAuctionStateUpdate}
           />
         </div>
 
@@ -155,23 +197,26 @@ const AuctionPageLayout = (props) => {
           {props.isOnline && props.myTeamId && (
             <AdminControls
               isHost={props.isOnlineHost || false}
-              auctionPhase={props.auctionPhase || 'ready'}
-              onStart={() => {
-                if (props.socket) {
-                  props.socket.emit('startAuction', { code: props.onlineRoom?.code });
-                }
-              }}
-              onSkip={() => console.log('Skip player')}
-              onUndo={() => console.log('Undo last action')}
+              auctionPhase={auctionState.phase || 'ready'}
+              onStart={startOnlineAuction}
+              onPause={() => emitAuctionControl('pause')}
+              onResume={() => emitAuctionControl('resume')}
+              onSkip={() => emitAuctionControl('skip')}
+              onAccelerate={() => emitAuctionControl('accelerate')}
             />
+          )}
+
+          {controlError && (
+            <div className="text-xs bg-red-500/20 border border-red-500/50 text-red-300 px-3 py-2 rounded-lg">
+              {controlError}
+            </div>
           )}
 
           {/* Current Team Alerts */}
           {displayTeams && props.myTeamId && (
             <AuctionAlerts
               team={displayTeams.find(t => t.id === props.myTeamId)}
-              currentBid={props.currentBid || 0}
-              nextBidAmount={(props.currentBid || 0) + 10}
+              nextBidAmount={auctionState.nextBidAmount || 0}
             />
           )}
         </div>
@@ -181,10 +226,10 @@ const AuctionPageLayout = (props) => {
       <div className="px-4 py-3 border-t border-slate-800 bg-slate-900/50 overflow-x-auto">
         <AuctionAnalytics
           teams={displayTeams || []}
-          soldPlayers={props.soldPlayers || []}
-          currentPlayer={currentPlayer}
-          queue={queue}
-          fullQueue={fullQueue}
+          soldPlayers={auctionState.soldPlayers || props.soldPlayers || []}
+          currentPlayer={auctionState.currentPlayer || currentPlayer}
+          queue={auctionState.queue || queue}
+          fullQueue={auctionState.fullQueue || fullQueue}
           getSetById={getSetById}
         />
       </div>
@@ -210,7 +255,7 @@ const AuctionPageLayout = (props) => {
           {bidHistory.slice(0, 5).map((bid, idx) => (
             <div key={idx} className="flex-shrink-0 bg-slate-800 px-3 py-1 rounded text-xs">
               <div className="text-slate-400">{bid.teamName}</div>
-              <div className="text-brand-gold font-bold">₹{bid.bid}L</div>
+              <div className="text-brand-gold font-bold">{formatAuctionPrice(bid.bid)}</div>
             </div>
           ))}
         </div>

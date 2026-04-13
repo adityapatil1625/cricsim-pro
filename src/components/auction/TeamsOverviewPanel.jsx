@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { formatAuctionPrice } from '../../utils/auctionUtils';
 
 const TeamsOverviewPanel = ({ teams = [], onTeamSelect = () => {} }) => {
   const [expandedTeam, setExpandedTeam] = useState(null);
@@ -60,7 +61,7 @@ const TeamsOverviewPanel = ({ teams = [], onTeamSelect = () => {} }) => {
             <div className="px-3 py-2 border-t border-slate-700 bg-slate-900/50 space-y-2 text-xs">
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Purse Left:</span>
-                <span className="font-bold text-brand-gold">₹{team.purse !== undefined ? team.purse : 1000}L</span>
+                <span className="font-bold text-brand-gold">{formatAuctionPrice(team.purse !== undefined ? team.purse : 1000)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Squad:</span>
@@ -104,7 +105,7 @@ const TeamsOverviewPanel = ({ teams = [], onTeamSelect = () => {} }) => {
                   <div key={idx} className="flex justify-between items-center text-[10px] bg-slate-800/50 px-2 py-1 rounded">
                     <span className="text-slate-200 truncate flex-1">{player.name}</span>
                     <span className="text-brand-gold font-bold flex-shrink-0">
-                      ₹{player.soldPrice}L
+                      {formatAuctionPrice(player.soldPrice)}
                     </span>
                   </div>
                 ))}

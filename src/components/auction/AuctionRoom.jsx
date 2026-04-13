@@ -17,13 +17,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import {
-  Clock,
-  Users,
-  TrendingUp,
   ChevronLeft,
 } from '../shared/Icons';
-import { buildSimpleAuctionQueue, getSetById, getBidIncrement, formatPrice } from '../../data/playerPoolV2';
-import { validateTeamComposition, getTeamRoleBalance } from '../../utils/auctionUtils';
+import { buildSimpleAuctionQueue, getSetById, getBidIncrement } from '../../data/playerPoolV2';
+import { formatAuctionPrice, validateTeamComposition, getTeamRoleBalance } from '../../utils/auctionUtils';
 import SetContextDisplay from './SetContextDisplay';
 
 // Auction configuration constants
@@ -51,6 +48,7 @@ const AuctionRoom = ({
   onBidPlaced = () => {},
   onPlayerUpdate = () => {},
   onAuctionLogUpdate = () => {},
+  onAuctionStateUpdate = () => {},
 }) => {
   // State for auction progression
   const [auctionPhase, setAuctionPhase] = useState('initializing');
@@ -72,6 +70,7 @@ const AuctionRoom = ({
   // History and logging
   const [soldPlayers, setSoldPlayers] = useState([]);
   const [auctionLog, setAuctionLog] = useState([]);
+  const [bidHistory, setBidHistory] = useState([]);
   const [lastSoldPlayer, setLastSoldPlayer] = useState(null);
   const [showSoldOverlay, setShowSoldOverlay] = useState(false);
   const [playerProcessed, setPlayerProcessed] = useState(false); // Prevent duplicate sold/unsold processing
@@ -208,7 +207,7 @@ const AuctionRoom = ({
 
     console.log(`✅ Announcing player from queue of ${queue.length} players: ${queue[0]?.name}`);
     const nextPlayer = queue[0];
-    console.log(`🎤 Current player: ${nextPlayer.name}, Set: ${nextPlayer.auctionSet}, Base: ₹${nextPlayer.basePrice}L`);
+    console.log(`Current player: ${nextPlayer.name}, Set: ${nextPlayer.auctionSet}, Base: ${formatAuctionPrice(nextPlayer.basePrice)}`);
     setCurrentPlayer(nextPlayer);
     setPlayerProcessed(false); // Reset flag for new player
     const basePriceAmount = nextPlayer.basePrice || 0;
@@ -219,7 +218,7 @@ const AuctionRoom = ({
     setBiddingStage('PLAYER_ANNOUNCED');
     setTimer(AUCTION_CONFIG.BID_TIMER);
     setAuctionLog(prev => [
-      { message: `📍 ${nextPlayer.name} is up for auction - Base price ₹${basePriceAmount}L`, type: 'player', timestamp: new Date() },
+      { message: `${nextPlayer.name} is up for auction - Base price ${formatAuctionPrice(basePriceAmount)}`, type: 'player', timestamp: new Date() },
       ...prev.slice(0, 99),
     ]);
     
@@ -236,6 +235,14 @@ const AuctionRoom = ({
     timerRef.current = setInterval(() => {
       setTimer(prev => {
         const newTimer = prev <= 1 ? 0 : prev - 1;
+
+        if (newTimer <= 1) {
+          setBiddingStage('GOING_TWICE');
+        } else if (newTimer <= 3) {
+          setBiddingStage('GOING_ONCE');
+        } else if (biddingStageRef.current === 'PLAYER_ANNOUNCED' && currentBidderRef.current) {
+          setBiddingStage('BIDDING_ACTIVE');
+        }
         
         if (newTimer <= 0) {
           // Mark as processed to prevent duplicate calls
@@ -288,6 +295,7 @@ const AuctionRoom = ({
       setTimer(typeof state.timer === 'number' ? state.timer : AUCTION_CONFIG.BID_TIMER);
       setSoldPlayers(state.soldPlayers || []);
       setAuctionLog(state.auctionLog || []);
+      setBidHistory(state.bidHistory || []);
       setLastSoldPlayer(state.lastSoldPlayer || null);
       setShowSoldOverlay(!!state.showSoldOverlay);
       setBidError(null);
@@ -313,6 +321,9 @@ const AuctionRoom = ({
 
   const handleSoldPlayer = useCallback(
     (player, teamId, price) => {
+      if (!player || !teamId) return;
+
+      setPlayerProcessed(true);
       // Mark player as sold for visual feedback
       setLastSoldPlayer({ player, teamId, price });
       setShowSoldOverlay(true);
@@ -321,7 +332,7 @@ const AuctionRoom = ({
       setCurrentBidder(null);
       setCurrentBidPlayerId(null);
       setBidError(null);
-      setBiddingStage('PLAYER_ANNOUNCED');
+      setBiddingStage('SOLD');
 
       // Rapid confetti bursts
       const burstConfetti = () => {
@@ -399,7 +410,7 @@ const AuctionRoom = ({
       ]);
 
       addLog(
-        `✅ ${player.name} (${player.role || 'player'}) sold for ₹${price}L to ${soldTeam?.iplTeamId || teamId}`,
+        `${player.name} (${player.role || 'player'}) sold for ${formatAuctionPrice(price)} to ${soldTeam?.iplTeamId || teamId}`,
         'sold'
       );
 
@@ -422,7 +433,7 @@ const AuctionRoom = ({
     setCurrentBidder(null);
     setCurrentBidPlayerId(null);
     setBidError(null);
-    setBiddingStage('PLAYER_ANNOUNCED');
+    setBiddingStage('UNSOLD');
     
     setUnsold(prev => [...prev, player]);
     addLog(`❌ ${player.name} - UNSOLD`, 'unsold');
@@ -447,15 +458,27 @@ const AuctionRoom = ({
       return;
     }
 
-    // Update bid state
-    onBidPlaced(nextBidAmount);
-
     // Only add log in offline mode - online mode will add via socket listener
     if (!isOnline) {
+      const bidderTeam = auctionTeams.find(t => t.id === myTeamId);
+
       setCurrentBid(nextBidAmount);
       setCurrentBidder(myTeamId);
       setCurrentBidPlayerId(currentPlayer.id);
       setTimer(AUCTION_CONFIG.BID_TIMER); // Reset timer on each bid
+      setPlayerProcessed(false);
+      setBidHistory(prev => [
+        {
+          teamId: myTeamId,
+          teamName: bidderTeam?.iplTeamId || bidderTeam?.name || 'Your team',
+          playerId: currentPlayer.id,
+          playerName: currentPlayer.name,
+          bid: nextBidAmount,
+          timestamp: new Date(),
+        },
+        ...prev.slice(0, 49),
+      ]);
+      onBidPlaced(nextBidAmount);
 
       // Move to BIDDING_ACTIVE if in PLAYER_ANNOUNCED
       if (biddingStage === 'PLAYER_ANNOUNCED') {
@@ -468,7 +491,7 @@ const AuctionRoom = ({
       }
 
       addLog(
-        `💰 ${auctionTeams.find(t => t.id === myTeamId)?.iplTeamId || 'Your'} team bid ₹${nextBidAmount}L for ${currentPlayer.name}`,
+        `Bid: ${bidderTeam?.iplTeamId || 'Your'} team bid ${formatAuctionPrice(nextBidAmount)} for ${currentPlayer.name}`,
         'bid'
       );
     }
@@ -515,14 +538,14 @@ const AuctionRoom = ({
     }
     
     if (bidAmount > team.purse) {
-      return { valid: false, reason: `Insufficient purse. Available: ₹${team.purse}L` };
+      return { valid: false, reason: `Insufficient purse. Available: ${formatAuctionPrice(team.purse)}` };
     }
     
-    if (team.squad.length >= AUCTION_CONFIG.SQUAD_MAX) {
+    if ((team.squad?.length || 0) >= AUCTION_CONFIG.SQUAD_MAX) {
       return { valid: false, reason: 'Squad is full' };
     }
     
-    if (currentPlayer?.isOverseas && team.overseasCount >= AUCTION_CONFIG.MAX_OVERSEAS) {
+    if (currentPlayer?.isOverseas && (team.overseasCount || 0) >= AUCTION_CONFIG.MAX_OVERSEAS) {
       return { valid: false, reason: 'Overseas limit reached' };
     }
     
@@ -531,6 +554,49 @@ const AuctionRoom = ({
 
   const nextBidAmount = currentPlayer ? getNextBidAmount() : 0;
   const nextBidValidation = currentPlayer ? validateBid(nextBidAmount) : { valid: false, reason: 'Waiting for player' };
+
+  useEffect(() => {
+    onAuctionStateUpdate({
+      phase: auctionPhase,
+      biddingStage,
+      queue,
+      fullQueue,
+      unsold,
+      currentPlayer,
+      auctionTeams,
+      currentBid,
+      basePrice,
+      currentBidder,
+      currentBidPlayerId,
+      timer,
+      soldPlayers,
+      auctionLog,
+      bidHistory,
+      lastSoldPlayer,
+      showSoldOverlay,
+      nextBidAmount,
+    });
+  }, [
+    auctionPhase,
+    biddingStage,
+    queue,
+    fullQueue,
+    unsold,
+    currentPlayer,
+    auctionTeams,
+    currentBid,
+    basePrice,
+    currentBidder,
+    currentBidPlayerId,
+    timer,
+    soldPlayers,
+    auctionLog,
+    bidHistory,
+    lastSoldPlayer,
+    showSoldOverlay,
+    nextBidAmount,
+    onAuctionStateUpdate,
+  ]);
 
   if (auctionPhase === 'initializing') {
     return (
@@ -594,7 +660,7 @@ const AuctionRoom = ({
             </div>
             <div>
               <p className="text-xs text-slate-500">Total Purse</p>
-              <p className="text-3xl font-bold text-blue-400">₹{auctionTeams.length * AUCTION_CONFIG.TOTAL_PURSE}L</p>
+              <p className="text-3xl font-bold text-blue-400">{formatAuctionPrice(auctionTeams.length * AUCTION_CONFIG.TOTAL_PURSE)}</p>
             </div>
           </div>
         </div>
@@ -623,7 +689,7 @@ const AuctionRoom = ({
                   Squad: {team.squad.length}/{AUCTION_CONFIG.SQUAD_MAX}
                 </p>
                 <p className="text-sm font-bold text-brand-gold mt-1">
-                  ₹{team.purse}L remaining
+                  {formatAuctionPrice(team.purse)} remaining
                 </p>
               </div>
             ))}
@@ -749,7 +815,16 @@ const AuctionRoom = ({
                             <span className="text-orange-400">🟠 GOING TWICE...</span>
                           )}
                           {biddingStage === 'PLAYER_ANNOUNCED' && (
-                            <span className="text-blue-400">🔵 PLAYER ANNOUNCED</span>
+                            <span className="text-blue-400">PLAYER ANNOUNCED</span>
+                          )}
+                          {biddingStage === 'SOLD' && (
+                            <span className="text-green-400">SOLD</span>
+                          )}
+                          {biddingStage === 'UNSOLD' && (
+                            <span className="text-red-400">UNSOLD</span>
+                          )}
+                          {auctionPhase === 'paused' && (
+                            <span className="text-yellow-400">PAUSED</span>
                           )}
                         </div>
                       </div>
@@ -817,7 +892,7 @@ const AuctionRoom = ({
                       <div className="border-t border-slate-700 pt-2">
                         <p className="text-[10px] text-slate-400 text-center mb-1">Current Bid</p>
                         <p className="text-3xl font-bold text-brand-gold text-center">
-                          ₹{currentBid ? currentBid : (currentPlayer.basePrice || basePrice)}L
+                          {formatAuctionPrice(currentBid ? currentBid : (currentPlayer.basePrice || basePrice))}
                         </p>
                         {currentBidder && (
                           <p className="text-xs text-slate-300 text-center mt-1">
@@ -831,7 +906,7 @@ const AuctionRoom = ({
                     {showSoldOverlay && lastSoldPlayer && (
                       <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-green-500/90 to-emerald-600/90 flex flex-col items-center justify-center gap-2 animate-pulse">
                         <div className="text-6xl font-bold text-white drop-shadow-lg">✓ SOLD</div>
-                        <div className="text-2xl font-bold text-white drop-shadow-lg">₹{lastSoldPlayer.price}L</div>
+                        <div className="text-2xl font-bold text-white drop-shadow-lg">{formatAuctionPrice(lastSoldPlayer.price)}</div>
                         <div className="text-lg text-white drop-shadow-lg font-semibold">
                           {auctionTeams.find(t => t.id === lastSoldPlayer.teamId)?.iplTeamId}
                         </div>
@@ -853,7 +928,7 @@ const AuctionRoom = ({
                         <div className="bg-slate-800/50 rounded-lg p-2">
                           <p className="text-xs text-slate-400">Next Bid</p>
                           <p className="text-xl font-bold text-purple-300">
-                            ₹{nextBidAmount}L
+                            {formatAuctionPrice(nextBidAmount)}
                           </p>
                         </div>
 
@@ -862,7 +937,7 @@ const AuctionRoom = ({
                           disabled={!nextBidValidation.valid}
                           className="w-full py-3 px-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:from-slate-700 disabled:to-slate-800 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all text-base"
                         >
-                          🔔 BID ₹{nextBidAmount}L
+                          Bid {formatAuctionPrice(nextBidAmount)}
                         </button>
 
                         {!nextBidValidation.valid && (
@@ -875,19 +950,20 @@ const AuctionRoom = ({
                           <div className="text-xs space-y-0.5 bg-slate-800/30 rounded-lg p-2 border border-slate-700">
                             <div className="flex justify-between">
                               <span>💰 Purse:</span>
-                              <span className="text-emerald-400 font-bold">₹{myTeam.purse}Cr</span>
+                              <span className="text-emerald-400 font-bold">{formatAuctionPrice(myTeam.purse)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span>👥 Squad:</span>
-                              <span className="text-blue-400">{myTeam.squad.length}/{AUCTION_CONFIG.SQUAD_MAX}</span>
+                              <span className="text-blue-400">{myTeam.squad?.length || 0}/{AUCTION_CONFIG.SQUAD_MAX}</span>
                             </div>
                           </div>
                         )}
                       </div>
                     ) : (
                       <div className="text-xs text-slate-400 text-center py-2">
-                        {auctionPhase === 'ready' && '⏸️ Not started'}
-                        {auctionPhase === 'completed' && '✓ Completed'}
+                        {auctionPhase === 'ready' && 'Not started'}
+                        {auctionPhase === 'paused' && 'Auction paused'}
+                        {auctionPhase === 'completed' && 'Completed'}
                       </div>
                     )}
                   </div>

@@ -194,6 +194,11 @@ const OnlineMenuPage = ({
                         alert("Need at least 2 players to start auction");
                         return;
                       }
+                      const allTeamsSelected = onlineRoom.players.every(p => p.iplTeam);
+                      if (!allTeamsSelected) {
+                        alert("All players must select an IPL team first");
+                        return;
+                      }
                       socket.emit("startAuction", {
                         code: onlineRoom.code,
                       });

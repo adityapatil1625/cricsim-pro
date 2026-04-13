@@ -283,6 +283,14 @@ function handleTeamSelection(socket, io) {
 
     const player = room.players.find((p) => p.socketId === socket.id);
     if (player) {
+      const isTakenByAnotherPlayer = room.players.some(
+        (p) => p.socketId !== socket.id && p.iplTeam === teamId
+      );
+      if (isTakenByAnotherPlayer) {
+        console.warn(`Team ${teamId} is already selected in room ${codeValidation.code}`);
+        return;
+      }
+
       const oldTeam = player.iplTeam;
       if (player.iplTeam === teamId) {
         player.iplTeam = null;
