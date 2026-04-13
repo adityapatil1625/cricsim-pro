@@ -2,6 +2,7 @@
 
 const { rooms } = require("../utils/roomManager");
 const { validateRoomCode, sanitizeString } = require("../utils/validation");
+const { isRoomMember } = require("../utils/socketGuards");
 
 /**
  * Handle chat messages
@@ -24,10 +25,10 @@ function handleChat(socket, io) {
       }
 
       const safeMessage = sanitizeString(String(message || '')).trim();
-      const safeSender = sanitizeString(String(sender || '')).trim();
+      const submittedSender = sanitizeString(String(sender || '')).trim();
       
       // Basic validation
-      if (!safeMessage || !safeSender) {
+      if (!safeMessage || !submittedSender) {
         console.warn(`⚠️  Invalid message data from ${socket.id}`);
         return;
       }
@@ -35,6 +36,18 @@ function handleChat(socket, io) {
       const room = rooms.get(codeValidation.code);
       if (!room) {
         console.warn(`⚠️  Message sent to non-existent room: ${codeValidation.code}`);
+        return;
+      }
+
+      if (!isRoomMember(room, socket.id)) {
+        console.warn(`⚠️  Unauthorized message attempt from ${socket.id} to ${codeValidation.code}`);
+        return;
+      }
+
+      const senderPlayer = room.players.find((player) => player.socketId === socket.id);
+      const safeSender = sanitizeString(senderPlayer?.name || submittedSender).trim();
+      if (!safeSender) {
+        console.warn(`⚠️  Invalid message sender from ${socket.id}`);
         return;
       }
       

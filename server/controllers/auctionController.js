@@ -2,6 +2,7 @@
 
 const { validateRoomCode, validateBidAmount } = require("../utils/validation");
 const { rooms, updateRoomActivity } = require("../utils/roomManager");
+const { isRoomMember } = require("../utils/socketGuards");
 
 const AUCTION_CONFIG = {
   TOTAL_PURSE: 1000,
@@ -310,7 +311,7 @@ function validateAuctionBid(state, teamId, bidAmount, playerId) {
   return { valid: true };
 }
 
-function isRoomMember(room, socketId) {
+function isRoomMemberInAuction(room, socketId) {
   return room?.players?.some((player) => player.socketId === socketId);
 }
 
@@ -416,6 +417,11 @@ function handleAuctionStateRequest(socket) {
       const room = rooms.get(codeValidation.code);
       if (!room) {
         callback?.({ success: false, error: "Room not found" });
+        return;
+      }
+
+      if (!isRoomMember(room, socket.id)) {
+        callback?.({ success: false, error: "You are not part of this room" });
         return;
       }
 

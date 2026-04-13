@@ -1,7 +1,8 @@
 // server/controllers/matchController.js
 
 const { validateMatchState, validateRoomCode } = require("../utils/validation");
-const { rooms, getOrCreateRoom, updateRoomActivity } = require("../utils/roomManager");
+const { rooms, updateRoomActivity } = require("../utils/roomManager");
+const { isRoomHost, isRoomMember } = require("../utils/socketGuards");
 
 /**
  * Handle match state update
@@ -22,13 +23,20 @@ function handleMatchStateUpdate(socket, io) {
         console.error(`❌ Invalid room code in updateMatchState:`, codeValidation.error);
         return;
       }
+      const room = rooms.get(codeValidation.code);
+      if (!room) {
+        console.error(`❌ Room not found in updateMatchState: ${codeValidation.code}`);
+        return;
+      }
+      if (!isRoomHost(room, socket.id) && !isRoomMember(room, socket.id)) {
+        console.error(`❌ Unauthorized match state update from ${socket.id} in ${codeValidation.code}`);
+        return;
+      }
       const validation = validateMatchState(matchState);
       if (!validation.valid) {
         console.error(`❌ Invalid match state in ${codeValidation.code}:`, validation.error);
         return;
       }
-
-      const room = getOrCreateRoom(codeValidation.code);
 
       updateRoomActivity(codeValidation.code);
 
@@ -93,7 +101,7 @@ function handleTossResult(socket, io) {
       }
       const room = rooms.get(codeValidation.code);
 
-      if (!room) return;
+      if (!room || !isRoomHost(room, socket.id)) return;
 
       console.log(`🪙 Toss result in ${codeValidation.code}: ${winner} won and chose to ${choice}`);
       io.to(codeValidation.code).emit("tossResultBroadcast", { winner, choice });
@@ -117,7 +125,7 @@ function handleInningsBreak(socket, io) {
       }
       const room = rooms.get(codeValidation.code);
 
-      if (!room) return;
+      if (!room || !isRoomHost(room, socket.id)) return;
 
       console.log(`🔄 Innings break in ${codeValidation.code}`);
       io.to(codeValidation.code).emit("inningsBreakBroadcast");
@@ -141,7 +149,7 @@ function handleMatchEnd(socket, io) {
       }
       const room = rooms.get(codeValidation.code);
 
-      if (!room) return;
+      if (!room || !isRoomHost(room, socket.id)) return;
 
       console.log(`🏁 Match ended in ${codeValidation.code}:`, result);
       io.to(codeValidation.code).emit("matchEndBroadcast", { result });

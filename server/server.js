@@ -23,6 +23,7 @@ const { initializeChatHandlers } = require("./controllers/chatController");
 const { startCleanupInterval } = require("./utils/roomManager");
 
 const app = express();
+app.disable("x-powered-by");
 const PORT = process.env.PORT || 4000;
 const API_KEY = process.env.CRICKETDATA_API_KEY;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
@@ -118,6 +119,7 @@ app.get("/api/players/search", async (req, res) => {
 
 const server = http.createServer(app);
 const io = new Server(server, {
+  maxHttpBufferSize: 1e6,
   cors: {
     origin: allowedOrigins,
     methods: ["GET", "POST"],

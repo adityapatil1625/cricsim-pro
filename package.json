@@ -24,7 +24,10 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
     "recharts": "^3.6.0",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.3"
+  },
+  "overrides": {
+    "socket.io-parser": "4.2.6"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

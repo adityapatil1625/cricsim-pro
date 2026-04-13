@@ -15,6 +15,7 @@ const {
   getAvailableRooms,
   removePlayerFromRoom,
 } = require("../utils/roomManager");
+const { isRoomMember } = require("../utils/socketGuards");
 
 /**
  * Handle room creation
@@ -324,9 +325,14 @@ function handlePlayerReady(socket, io) {
       return;
     }
 
+    if (!isRoomMember(room, socket.id)) {
+      console.error(`❌ Unauthorized playerReady from ${socket.id} in ${codeValidation.code}`);
+      return;
+    }
+
     io.to(codeValidation.code).emit("playerReady", {
       roomCode: codeValidation.code,
-      socketId: data.socketId
+      socketId: socket.id
     });
   });
 
@@ -344,10 +350,15 @@ function handlePlayerReady(socket, io) {
       return;
     }
 
+    if (!isRoomMember(room, socket.id)) {
+      console.error(`❌ Unauthorized matchEntryReady from ${socket.id} in ${codeValidation.code}`);
+      return;
+    }
+
     io.to(codeValidation.code).emit("matchEntryReady", {
       roomCode: codeValidation.code,
       fixtureId: data.fixtureId,
-      socketId: data.socketId
+      socketId: socket.id
     });
   });
 }
