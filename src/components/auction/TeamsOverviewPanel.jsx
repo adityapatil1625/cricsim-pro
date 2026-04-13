@@ -61,7 +61,7 @@ const TeamsOverviewPanel = ({ teams = [], onTeamSelect = () => {} }) => {
             <div className="px-3 py-2 border-t border-slate-700 bg-slate-900/50 space-y-2 text-xs">
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Purse Left:</span>
-                <span className="font-bold text-brand-gold">{formatAuctionPrice(team.purse !== undefined ? team.purse : 1000)}</span>
+                <span className="font-bold text-brand-gold">{formatAuctionPrice(team.purse !== undefined ? team.purse : 12000)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Squad:</span>
