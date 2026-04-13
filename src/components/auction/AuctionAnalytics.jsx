@@ -9,7 +9,7 @@ import { formatAuctionPrice } from '../../utils/auctionUtils';
 const AuctionAnalytics = ({ teams = [], soldPlayers = [], currentPlayer = null, queue = [], fullQueue = [], getSetById = null }) => {
   // Config - must be declared before use
   const AUCTION_CONFIG = {
-    TOTAL_PURSE: 1000,
+    TOTAL_PURSE: 12000,
   };
 
   // Calculate insights

@@ -89,7 +89,7 @@ const validateBidAmount = (bid) => {
     return { valid: false, error: 'Bid must be a positive integer' };
   }
   
-  if (bid > 10000) {
+  if (bid > 12000) {
     return { valid: false, error: 'Bid amount exceeds maximum limit' };
   }
   

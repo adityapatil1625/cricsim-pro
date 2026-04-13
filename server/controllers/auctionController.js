@@ -5,7 +5,7 @@ const { rooms, updateRoomActivity } = require("../utils/roomManager");
 const { isRoomMember } = require("../utils/socketGuards");
 
 const AUCTION_CONFIG = {
-  TOTAL_PURSE: 1000,
+  TOTAL_PURSE: 12000,
   BID_TIMER: 10,
   SOLD_OVERLAY_MS: 3500,
   UNSOLD_DELAY_MS: 500,

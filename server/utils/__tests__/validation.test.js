@@ -96,7 +96,7 @@ describe('validation', () => {
     });
 
     it('should reject amounts over limit', () => {
-      expect(validateBidAmount(10001).valid).toBe(false);
+      expect(validateBidAmount(12001).valid).toBe(false);
     });
   });
 });

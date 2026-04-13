@@ -9,7 +9,7 @@ export const AUCTION_CONFIG = {
   SQUAD_MIN: 18,
   SQUAD_MAX: 25,
   MAX_OVERSEAS: 8,
-  TOTAL_PURSE: 90, // ₹90 crore per team (IPL Mega Auction standard)
+  TOTAL_PURSE: 12000, // ₹120 crore per team (stored in lakhs)
   BASE_PRICE: 20,
   INITIAL_TIMER: 10,
   BID_TIMER: 10,
@@ -211,7 +211,7 @@ export const initializeAuctionTeams = (teams) => {
   return teams.map(team => ({
     ...team,
     squad: [],
-    purse: AUCTION_CONFIG.TOTAL_PURSE, // Remaining purse (₹90Cr)
+    purse: AUCTION_CONFIG.TOTAL_PURSE, // Remaining purse (₹120Cr)
     remainingPurse: AUCTION_CONFIG.TOTAL_PURSE,
     totalSpent: 0, // Total amount spent so far
     overseasCount: 0,
