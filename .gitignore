@@ -22,3 +22,7 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Local agent/automation metadata
+.codex/
+.github/
