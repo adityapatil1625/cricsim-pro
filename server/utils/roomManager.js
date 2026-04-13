@@ -68,6 +68,13 @@ function cleanupStaleRooms() {
     const isEmptyTooLong = isEmpty && (now - room.createdAt > EMPTY_ROOM_TIMEOUT);
     
     if (isInactive || isEmptyTooLong) {
+      if (room.auctionState?.tickTimeout) {
+        clearTimeout(room.auctionState.tickTimeout);
+      }
+      if (room.auctionState?.transitionTimeout) {
+        clearTimeout(room.auctionState.transitionTimeout);
+      }
+
       // Clean up associated user sockets
       room.players.forEach(player => {
         userSockets.delete(player.socketId);

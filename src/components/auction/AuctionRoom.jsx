@@ -65,6 +65,7 @@ const AuctionRoom = ({
   const [currentBid, setCurrentBid] = useState(0);
   const [basePrice, setBasePrice] = useState(0);
   const [currentBidder, setCurrentBidder] = useState(null);
+  const [currentBidPlayerId, setCurrentBidPlayerId] = useState(null);
   const [timer, setTimer] = useState(AUCTION_CONFIG.BID_TIMER);
   const [bidError, setBidError] = useState(null); // Error message for invalid bid
 
@@ -83,8 +84,10 @@ const AuctionRoom = ({
   const currentPlayerRef = useRef(currentPlayer);
   const currentBidRef = useRef(currentBid);
   const currentBidderRef = useRef(currentBidder);
+  const currentBidPlayerIdRef = useRef(currentBidPlayerId);
   const biddingStageRef = useRef(biddingStage);
   const queueRef = useRef(queue);
+  const guestOverlayTimeoutRef = useRef(null);
 
   // Sync refs with state
   useEffect(() => {
@@ -98,6 +101,14 @@ const AuctionRoom = ({
   useEffect(() => {
     currentBidRef.current = currentBid;
   }, [currentBid]);
+
+  useEffect(() => {
+    currentBidPlayerIdRef.current = currentBidPlayerId;
+  }, [currentBidPlayerId]);
+
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
 
   // Notify parent component of player and queue updates
   useEffect(() => {
@@ -141,19 +152,12 @@ const AuctionRoom = ({
 
       console.log(`🎯 Initializing auction. isOnline: ${isOnline}, isHost: ${isHost}, socket.id: ${socket?.id}, host: ${onlineRoom?.host}`);
       
-      // Only build queue if offline or if online AND is host
-      if (!isOnline || isHost) {
-        // Build auction queue with IPL-style sets (Marquee → Capped → Overseas → Uncapped)
-        const queue = buildSimpleAuctionQueue(playerPool);
-        console.log(`📊 Built auction queue with ${queue.length} players organized by IPL sets`);
-        setQueue(queue);
-        setFullQueue(queue); // Store full queue for position tracking
-        setBasePrice(queue.length > 0 ? queue[0].basePrice || 0 : 0);
-      } else {
-        // Online non-host: wait for queue sync from server
-        console.log('⏳ Non-host: Waiting for queue sync from host...');
-        setQueue([]);
-      }
+      // Build queue locally for ready-state UI; online mode becomes server-authoritative once initialized.
+      const queue = buildSimpleAuctionQueue(playerPool);
+      console.log(`📊 Built auction queue with ${queue.length} players organized by IPL sets`);
+      setQueue(queue);
+      setFullQueue(queue); // Store full queue for position tracking
+      setBasePrice(queue.length > 0 ? queue[0].basePrice || 0 : 0);
 
       const initialTeams = teams.map(team => ({
         ...team,
@@ -183,6 +187,7 @@ const AuctionRoom = ({
 
   // Progress to next player
   useEffect(() => {
+    if (isOnline) return;
     console.log(`🔍 Progress effect triggered: phase=${auctionPhase}, currentPlayer=${currentPlayer?.name}, queue.length=${queue.length}`);
     
     if (auctionPhase !== 'running' || currentPlayer !== null) {
@@ -210,6 +215,7 @@ const AuctionRoom = ({
     setCurrentBid(basePriceAmount);
     setBasePrice(basePriceAmount);
     setCurrentBidder(null);
+    setCurrentBidPlayerId(nextPlayer.id);
     setBiddingStage('PLAYER_ANNOUNCED');
     setTimer(AUCTION_CONFIG.BID_TIMER);
     setAuctionLog(prev => [
@@ -217,37 +223,19 @@ const AuctionRoom = ({
       ...prev.slice(0, 99),
     ]);
     
-    // Host broadcasts next player to all guests for synchronization
-    if (isOnline && isHost && socket && onlineRoom) {
-      console.log(`📤 Host broadcasting next player: ${nextPlayer.name} to room ${onlineRoom?.code}`);
-      socket.emit('auctionNextPlayer', {
-        code: onlineRoom?.code,
-        player: nextPlayer,
-      });
-    }
-    
     // Update queue in separate effect to avoid re-triggering this effect
     queueRef.current = queue.slice(1);
     setQueue(queue.slice(1));
-  }, [auctionPhase, queue.length, isOnline, currentPlayer, isHost, socket, onlineRoom]); // currentPlayer needed to detect when player is sold/unsold
+  }, [auctionPhase, queue.length, isOnline, currentPlayer]); // currentPlayer needed to detect when player is sold/unsold
 
   // Timer countdown and broadcast
   useEffect(() => {
+    if (isOnline) return;
     if (auctionPhase !== 'running' || !currentPlayer || playerProcessed) return;
 
     timerRef.current = setInterval(() => {
       setTimer(prev => {
         const newTimer = prev <= 1 ? 0 : prev - 1;
-        
-        // Host broadcasts timer to all guests for synchronization
-        if (isOnline && isHost && socket && onlineRoom) {
-          console.log(`📤 Host broadcasting timer: ${newTimer}s for ${currentPlayerRef.current?.name}`);
-          socket.emit('auctionTimerUpdate', {
-            code: onlineRoom?.code,
-            timer: newTimer,
-            playerName: currentPlayerRef.current?.name,
-          });
-        }
         
         if (newTimer <= 0) {
           // Mark as processed to prevent duplicate calls
@@ -269,7 +257,7 @@ const AuctionRoom = ({
     }, 1000);
 
     return () => clearInterval(timerRef.current);
-  }, [auctionPhase, currentPlayer, playerProcessed, isOnline, isHost, socket, onlineRoom]);
+  }, [auctionPhase, currentPlayer, playerProcessed, isOnline]);
 
   // Add log entry - moved before useEffects that need it
   const addLog = useCallback((message, type = 'info') => {
@@ -279,201 +267,49 @@ const AuctionRoom = ({
     ]);
   }, []);
 
-  // Listen for bid updates from other players (online mode)
+  // Listen for server-authoritative auction state (online mode)
   useEffect(() => {
     if (!isOnline || !socket) return;
 
-    const handleBidUpdate = (data) => {
-      const { bid, teamId, playerName } = data;
-      const bidderTeam = auctionTeams.find(t => t.id === teamId);
-      
-      // Update bid state
-      setCurrentBid(bid);
-      setCurrentBidder(teamId);
-      
-      // Add to auction log
-      addLog(
-        `💰 ${bidderTeam?.iplTeamId || teamId} bid ₹${bid}L for ${playerName}`,
-        'bid'
-      );
-      console.log(`✅ Added bid to log: ${bidderTeam?.iplTeamId || teamId} bid ₹${bid}L`);
-    };
+    const applyAuctionState = (state) => {
+      if (!state) return;
 
-    socket.on('auctionBidUpdate', handleBidUpdate);
-
-    return () => {
-      socket.off('auctionBidUpdate', handleBidUpdate);
-    };
-  }, [isOnline, socket, auctionTeams, addLog]);
-
-
-
-  // Listen for queue sync from server (online mode)
-  useEffect(() => {
-    if (!isOnline || !socket) return;
-
-    const handleQueueSync = (data) => {
-      const { queue: syncedQueue } = data;
-      console.log(`📋 Received synced queue with ${syncedQueue.length} players`);
-      console.log(`   First 5 players: ${syncedQueue.slice(0, 5).map(p => p.name).join(', ')}`);
-      console.log(`   Current phase BEFORE: ${auctionPhase}, currentPlayer BEFORE: ${currentPlayer?.name}`);
-      
-      setQueue(syncedQueue);
-      setFullQueue(syncedQueue); // Store full queue for position tracking
-      if (syncedQueue.length > 0) {
-        setBasePrice(syncedQueue[0].basePrice || 0);
-      }
-      // Transition based on current phase:
-      // - If initializing: go to ready (shouldn't happen, but handle it)
-      // - If ready: go to running (this is non-host who got queue sync)
-      // - If running: stay running (this is host re-receiving own queue - now it has the official queue)
-      setAuctionPhase(prev => {
-        const nextPhase = (prev === 'ready') ? 'running' : prev;
-        console.log(`✅ Queue sync phase transition: ${prev} -> ${nextPhase}`);
-        // If host just got queue sync and no currentPlayer yet, the effect will trigger next
-        // If guest got queue sync and transitioning to 'running', the effect will trigger next
-        return nextPhase;
-      });
-      // Force currentPlayer to null if it was set from local queue (host case)
-      // so the effect will announce from the synced queue
-      if (currentPlayer) {
-        console.log(`🔄 Resetting currentPlayer from ${currentPlayer.name} to null (will re-announce from synced queue)`);
-        setCurrentPlayer(null);
-      }
-    };
-
-    socket.on('auctionQueueSync', handleQueueSync);
-
-    return () => {
-      socket.off('auctionQueueSync', handleQueueSync);
-    };
-  }, [isOnline, socket, addLog, currentPlayer?.name]);
-
-  // Listen for sold/unsold player events from host (online mode)
-  // Host won't receive these because server uses socket.broadcast
-  useEffect(() => {
-    if (!isOnline || !socket) return;
-
-    const handlePlayerSoldEvent = (data) => {
-      const { player, teamId, price } = data;
-      console.log(`📥 Received auctionPlayerSold for ${player.name} from host`);
-      
-      // Don't remove from queue - let host manage queue progression
-      // Guests should just update team rosters and wait for next player announcement
-      
-      // Add to sold players list
-      const soldTeam = auctionTeams.find(t => t.id === teamId);
-      setSoldPlayers(prev => [
-        ...prev,
-        {
-          player,
-          team: soldTeam,
-          price,
-        },
-      ]);
-      
-      // Update team roster
-      setAuctionTeams(prev =>
-        prev.map(team => {
-          if (team.id === teamId) {
-            const updatedSquad = [...team.squad, { ...player, soldPrice: price }];
-            const roleBalance = getTeamRoleBalance(updatedSquad);
-            const overseasCount = updatedSquad.filter(p => p.isOverseas).length;
-            const validation = validateTeamComposition(updatedSquad, AUCTION_CONFIG);
-            
-            return {
-              ...team,
-              squad: updatedSquad,
-              purse: team.purse - price,
-              roleBalance,
-              overseasCount,
-              isValid: validation.isValid,
-            };
-          }
-          return team;
-        })
-      );
-      
-      // Show sold overlay to all guests
-      setLastSoldPlayer({ player, teamId, price });
-      setShowSoldOverlay(true);
-      
-      // Clear bidding state so next player can be bid on immediately
-      // This is important for guests to be able to bid on the next player
-      setCurrentBidder(null);
-      setBiddingStage('PLAYER_ANNOUNCED');
-      
-      // Clear overlay after 3.5 seconds (same as host)
-      setTimeout(() => {
-        setShowSoldOverlay(false);
-        setLastSoldPlayer(null);
-      }, 3500);
-    };
-
-    const handlePlayerUnsoldEvent = (data) => {
-      const { player } = data;
-      console.log(`📥 Received auctionPlayerUnsold for ${player.name} from host`);
-      
-      // Don't remove from queue - let host manage queue progression
-      
-      // Add to unsold list
-      setUnsold(prev => [...prev, player]);
-      
-      // Clear bidding state so next player can be bid on immediately
-      setCurrentBidder(null);
-      setBiddingStage('PLAYER_ANNOUNCED');
-    };
-
-    socket.on('auctionPlayerSold', handlePlayerSoldEvent);
-    socket.on('auctionPlayerUnsold', handlePlayerUnsoldEvent);
-
-    return () => {
-      socket.off('auctionPlayerSold', handlePlayerSoldEvent);
-      socket.off('auctionPlayerUnsold', handlePlayerUnsoldEvent);
-    };
-  }, [isOnline, socket, auctionTeams]);
-
-  // Listen for timer updates from host (online mode for guests)
-  useEffect(() => {
-    if (!isOnline || !socket || isHost) return;
-
-    const handleTimerUpdate = (data) => {
-      const { timer, playerName } = data;
-      
-      // Only sync timer if we're looking at the same player
-      if (playerName === currentPlayer?.name) {
-        console.log(`📥 Guest received timer update: ${timer}s for ${playerName}`);
-        setTimer(timer);
-      }
-    };
-
-    const handleNextPlayerAnnouncement = (data) => {
-      const { player: nextPlayer } = data;
-      console.log(`📥 Guest received next player announcement: ${nextPlayer.name}`);
-      
-      // Set current player to the announced player
-      setCurrentPlayer(nextPlayer);
+      setAuctionPhase(state.phase || 'ready');
+      setBiddingStage(state.biddingStage || 'IDLE');
+      setQueue(state.queue || []);
+      setFullQueue(state.fullQueue || state.queue || []);
+      setUnsold(state.unsold || []);
+      setCurrentPlayer(state.currentPlayer || null);
+      setAuctionTeams(state.auctionTeams || []);
+      setCurrentBid(state.currentBid || 0);
+      setBasePrice(state.basePrice || state.currentPlayer?.basePrice || 0);
+      setCurrentBidder(state.currentBidder || null);
+      setCurrentBidPlayerId(state.currentBidPlayerId || null);
+      setTimer(typeof state.timer === 'number' ? state.timer : AUCTION_CONFIG.BID_TIMER);
+      setSoldPlayers(state.soldPlayers || []);
+      setAuctionLog(state.auctionLog || []);
+      setLastSoldPlayer(state.lastSoldPlayer || null);
+      setShowSoldOverlay(!!state.showSoldOverlay);
+      setBidError(null);
       setPlayerProcessed(false);
-      setCurrentBid(nextPlayer.basePrice || 0);
-      setBasePrice(nextPlayer.basePrice || 0);
-      setCurrentBidder(null);
-      setBiddingStage('PLAYER_ANNOUNCED');
-      setTimer(AUCTION_CONFIG.BID_TIMER)
-      
-      addLog(
-        `📍 ${nextPlayer.name} is up for auction - Base price ₹${nextPlayer.basePrice || 0}L`,
-        'player'
-      );
     };
 
-    socket.on('auctionTimerUpdate', handleTimerUpdate);
-    socket.on('auctionNextPlayer', handleNextPlayerAnnouncement);
+    const handleAuctionStateSync = (state) => {
+      applyAuctionState(state);
+    };
+
+    socket.on('auctionStateSync', handleAuctionStateSync);
+
+    socket.emit('requestAuctionState', { code: onlineRoom?.code }, (response) => {
+      if (response?.success && response.state) {
+        applyAuctionState(response.state);
+      }
+    });
 
     return () => {
-      socket.off('auctionTimerUpdate', handleTimerUpdate);
-      socket.off('auctionNextPlayer', handleNextPlayerAnnouncement);
+      socket.off('auctionStateSync', handleAuctionStateSync);
     };
-  }, [isOnline, socket, isHost, currentPlayer?.name]);
+  }, [isOnline, socket, onlineRoom?.code]);
 
   const handleSoldPlayer = useCallback(
     (player, teamId, price) => {
@@ -483,6 +319,8 @@ const AuctionRoom = ({
 
       // Clear bidder so the same team can bid on the next player
       setCurrentBidder(null);
+      setCurrentBidPlayerId(null);
+      setBidError(null);
       setBiddingStage('PLAYER_ANNOUNCED');
 
       // Rapid confetti bursts
@@ -565,18 +403,6 @@ const AuctionRoom = ({
         'sold'
       );
 
-      // Broadcast sold player to all clients in online mode
-      if (isOnline && socket && onlineRoom) {
-        console.log(`📤 Emitting auctionPlayerSold for ${player.name} to room ${onlineRoom?.code}`);
-        socket.emit('auctionPlayerSold', {
-          code: onlineRoom?.code,
-          player,
-          teamId,
-          price,
-          soldPrice: price,
-        });
-      }
-
       // Longer delay before clearing overlay and moving to next player
       setTimeout(() => {
         setShowSoldOverlay(false);
@@ -584,7 +410,7 @@ const AuctionRoom = ({
         setCurrentPlayer(null);
       }, 3500);
     },
-    [auctionTeams, isOnline, onlineRoom, socket, addLog]
+    [auctionTeams, addLog]
   );
 
   // Handle player unsold
@@ -594,25 +420,18 @@ const AuctionRoom = ({
 
     // Reset bidder state for the next player
     setCurrentBidder(null);
+    setCurrentBidPlayerId(null);
+    setBidError(null);
     setBiddingStage('PLAYER_ANNOUNCED');
     
     setUnsold(prev => [...prev, player]);
     addLog(`❌ ${player.name} - UNSOLD`, 'unsold');
     
-    // Broadcast unsold player to all clients in online mode
-    if (isOnline && socket && onlineRoom) {
-      console.log(`📤 Emitting auctionPlayerUnsold for ${player.name} to room ${onlineRoom?.code}`);
-      socket.emit('auctionPlayerUnsold', {
-        code: onlineRoom?.code,
-        player,
-      });
-    }
-    
     // Delay before clearing current player
     setTimeout(() => {
       setCurrentPlayer(null);
     }, 500);
-  }, [isOnline, socket, onlineRoom, addLog]);
+  }, [addLog]);
 
   // Handle bid placement
   const handlePlaceBid = useCallback(() => {
@@ -629,25 +448,25 @@ const AuctionRoom = ({
     }
 
     // Update bid state
-    setCurrentBid(nextBidAmount);
-    setCurrentBidder(myTeamId);
-    setTimer(AUCTION_CONFIG.BID_TIMER); // Reset timer on each bid
-
-    // Call bid history callback
     onBidPlaced(nextBidAmount);
-
-    // Move to BIDDING_ACTIVE if in PLAYER_ANNOUNCED
-    if (biddingStage === 'PLAYER_ANNOUNCED') {
-      setBiddingStage('BIDDING_ACTIVE');
-    }
-
-    // If in final stages, reset back to BIDDING_ACTIVE
-    if (biddingStage === 'GOING_ONCE' || biddingStage === 'GOING_TWICE') {
-      setBiddingStage('BIDDING_ACTIVE');
-    }
 
     // Only add log in offline mode - online mode will add via socket listener
     if (!isOnline) {
+      setCurrentBid(nextBidAmount);
+      setCurrentBidder(myTeamId);
+      setCurrentBidPlayerId(currentPlayer.id);
+      setTimer(AUCTION_CONFIG.BID_TIMER); // Reset timer on each bid
+
+      // Move to BIDDING_ACTIVE if in PLAYER_ANNOUNCED
+      if (biddingStage === 'PLAYER_ANNOUNCED') {
+        setBiddingStage('BIDDING_ACTIVE');
+      }
+
+      // If in final stages, reset back to BIDDING_ACTIVE
+      if (biddingStage === 'GOING_ONCE' || biddingStage === 'GOING_TWICE') {
+        setBiddingStage('BIDDING_ACTIVE');
+      }
+
       addLog(
         `💰 ${auctionTeams.find(t => t.id === myTeamId)?.iplTeamId || 'Your'} team bid ₹${nextBidAmount}L for ${currentPlayer.name}`,
         'bid'
@@ -655,12 +474,16 @@ const AuctionRoom = ({
     }
 
     if (isOnline) {
-      console.log(`📤 Emitting auctionBid:`, { code: onlineRoom?.code, playerName: currentPlayer?.name, bid: nextBidAmount });
       socket?.emit('auctionBid', {
         code: onlineRoom?.code,
         playerName: currentPlayer.name,
+        playerId: currentPlayer.id,
         bid: nextBidAmount,
         teamId: myTeamId,
+      }, (response) => {
+        if (!response?.success) {
+          setBidError(response?.error || 'Bid failed');
+        }
       });
     }
   }, [isOnline, currentPlayer, myTeamId, socket, onlineRoom, auctionTeams, biddingStage, onBidPlaced, addLog]);
@@ -682,7 +505,7 @@ const AuctionRoom = ({
     }
     
     // Prevent same team from bidding consecutively
-    if (currentBidder === myTeamId) {
+    if (currentBidder === myTeamId && currentBidPlayerId === currentPlayer?.id) {
       return { valid: false, reason: 'Wait for another team to bid' };
     }
     
@@ -705,6 +528,9 @@ const AuctionRoom = ({
     
     return { valid: true };
   };
+
+  const nextBidAmount = currentPlayer ? getNextBidAmount() : 0;
+  const nextBidValidation = currentPlayer ? validateBid(nextBidAmount) : { valid: false, reason: 'Waiting for player' };
 
   if (auctionPhase === 'initializing') {
     return (
@@ -733,21 +559,17 @@ const AuctionRoom = ({
           {isHost ? (
             <button
               onClick={() => {
-                console.log(`🚀 Start Auction clicked. isOnline: ${isOnline}, socket: ${socket?.id}, queue: ${queue.length}`);
                 if (isOnline && socket) {
-                  // Emit queue to server so all players get the same queue
-                  console.log(`📤 Emitting auctionQueueSync with ${queue.length} players to room ${onlineRoom?.code}`);
-                  console.log(`   First 5 players: ${queue.slice(0, 5).map(p => p.name).join(', ')}`);
-                  socket.emit('auctionQueueSync', {
+                  socket.emit('auctionInitialize', {
                     code: onlineRoom?.code,
-                    queue: queue,
+                    queue,
+                    teams,
+                  }, (response) => {
+                    if (!response?.success) {
+                      addLog(`❌ ${response?.error || 'Failed to start auction'}`, 'error');
+                    }
                   });
-                  // Delay phase transition so guests receive queue sync first
-                  setTimeout(() => {
-                    setAuctionPhase('running');
-                  }, 500);
                 } else {
-                  console.log('📋 Offline mode - no socket emit');
                   setAuctionPhase('running');
                 }
               }}
@@ -1031,17 +853,23 @@ const AuctionRoom = ({
                         <div className="bg-slate-800/50 rounded-lg p-2">
                           <p className="text-xs text-slate-400">Next Bid</p>
                           <p className="text-xl font-bold text-purple-300">
-                            ₹{getNextBidAmount()}L
+                            ₹{nextBidAmount}L
                           </p>
                         </div>
 
                         <button
                           onClick={handlePlaceBid}
-                          disabled={!validateBid(getNextBidAmount()).valid}
+                          disabled={!nextBidValidation.valid}
                           className="w-full py-3 px-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:from-slate-700 disabled:to-slate-800 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all text-base"
                         >
-                          🔔 BID ₹{getNextBidAmount()}L
+                          🔔 BID ₹{nextBidAmount}L
                         </button>
+
+                        {!nextBidValidation.valid && (
+                          <div className="text-[11px] bg-amber-500/10 border border-amber-500/30 text-amber-300 px-2 py-1 rounded">
+                            {nextBidValidation.reason}
+                          </div>
+                        )}
 
                         {myTeam && (
                           <div className="text-xs space-y-0.5 bg-slate-800/30 rounded-lg p-2 border border-slate-700">
